@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CoScripter3</title>
+    <link rel="stylesheet" href="src/panel/panel.css" />
+  </head>
+  <body>
+    <header class="cs-header">
+      <img src="icons/icon32.png" alt="" class="cs-logo" />
+      <div class="cs-title">
+        <h1>CoScripter<span class="cs-3">3</span></h1>
+        <p class="cs-tagline">Record, edit &amp; replay web tasks</p>
+      </div>
+    </header>
+
+    <section class="cs-scripts">
+      <div class="cs-row">
+        <input id="scriptName" type="text" class="cs-name" placeholder="Untitled script" />
+        <button id="newBtn" class="cs-btn cs-btn-ghost" title="New script">New</button>
+        <button id="saveBtn" class="cs-btn" title="Save script">Save</button>
+        <button id="deleteBtn" class="cs-btn cs-btn-ghost" title="Delete script">Delete</button>
+      </div>
+      <details id="libraryDetails" class="cs-library">
+        <summary>Saved scripts (<span id="scriptCount">0</span>)</summary>
+        <ul id="scriptList" class="cs-list"></ul>
+      </details>
+    </section>
+
+    <section class="cs-controls">
+      <button id="recordBtn" class="cs-btn cs-btn-record">
+        <span class="cs-dot"></span><span id="recordLabel">Record</span>
+      </button>
+      <button id="runBtn" class="cs-btn cs-btn-run">Run</button>
+      <button id="stepBtn" class="cs-btn">Step</button>
+      <button id="stopBtn" class="cs-btn cs-btn-ghost" disabled>Stop</button>
+    </section>
+
+    <section class="cs-editor-wrap">
+      <div id="backdrop" class="cs-backdrop"><div id="highlights"></div></div>
+      <textarea
+        id="editor"
+        class="cs-editor"
+        spellcheck="false"
+        placeholder="Press Record and act in the page, or type steps like:&#10;&#10;* go to &quot;example.com&quot;&#10;* enter &quot;hello&quot; into the &quot;Search&quot; textbox&#10;* click the &quot;Search&quot; button"
+      ></textarea>
+    </section>
+
+    <footer class="cs-footer">
+      <div id="status" class="cs-status">Ready.</div>
+      <div class="cs-io">
+        <button id="importBtn" class="cs-link">Import</button>
+        <button id="exportBtn" class="cs-link">Export</button>
+        <input id="importFile" type="file" accept=".coscript,.txt,text/plain" hidden />
+      </div>
+    </footer>
+
+    <script type="module" src="src/panel/panel.js"></script>
+  </body>
+</html>
