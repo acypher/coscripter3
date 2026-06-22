@@ -1,6 +1,9 @@
 # macOS
 .DS_Store
 
+# Release credentials (never commit)
+scripts/release.env
+
 # Editor / OS cruft
 *.swp
 *~

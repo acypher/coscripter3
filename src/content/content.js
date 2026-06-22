@@ -8,10 +8,23 @@
 //   - execute one command on request and reply with the result
 //   - on (re)load, tell the background worker it is ready so recording can resume
 //     across navigations
+//
+// Re-injection safety: properties set on `window` survive in the isolated world
+// for the document's whole lifetime, including across an extension reload (which
+// invalidates the previous instance's runtime context and kills its message
+// listener). So we must NOT short-circuit on a "already loaded" flag — doing so
+// would leave a tab with no live listener, and PING would never be answered
+// ("Can't record on this page."). Instead, every injection drops the previous
+// listener and registers a fresh one bound to the current (valid) context.
 
 (() => {
-  if (window.__coscripterContentLoaded) return;
-  window.__coscripterContentLoaded = true;
+  if (window.__coscripterListener) {
+    try {
+      chrome.runtime.onMessage.removeListener(window.__coscripterListener);
+    } catch (e) {
+      /* previous listener belonged to an invalidated context */
+    }
+  }
 
   const base = chrome.runtime.getURL("src/core/");
   const ready = (async () => {
@@ -26,7 +39,7 @@
     return { recorder, execute: executorMod.execute, Command: commandsMod.Command };
   })();
 
-  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  const listener = (msg, sender, sendResponse) => {
     if (!msg || !msg.type) return;
 
     if (msg.type === "PING") {
@@ -56,7 +69,10 @@
         .catch((e) => sendResponse({ ok: false, error: String(e) }));
       return true; // async response
     }
-  });
+  };
+
+  window.__coscripterListener = listener;
+  chrome.runtime.onMessage.addListener(listener);
 
   // Let the background worker know we are alive (used to resume recording after
   // navigation, and as a readiness signal).

@@ -8,7 +8,7 @@ It is a modernization of the original [CoScripter Firefox extension](https://git
 
 - **Record** your clicks, typing, menu selections, and page navigations into human-readable steps.
 - **Edit** the script as text — it's just readable sentences, one step per line.
-- **Replay** the whole script, or one step at a time, with the current step highlighted.
+- **Replay** the whole script, or one step at a time, with the step about to run highlighted.
 - **Save** scripts locally and **import/export** them as files.
 
 Scripts look like this:

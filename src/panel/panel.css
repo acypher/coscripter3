@@ -14,6 +14,7 @@
   --highlight-run: rgba(201, 133, 26, 0.22);
   --highlight-ok: rgba(22, 154, 91, 0.18);
   --highlight-error: rgba(226, 59, 46, 0.18);
+  --highlight-next: rgba(47, 109, 246, 0.18);
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
@@ -28,6 +29,7 @@
     --highlight-run: rgba(201, 133, 26, 0.3);
     --highlight-ok: rgba(22, 154, 91, 0.28);
     --highlight-error: rgba(226, 59, 46, 0.3);
+    --highlight-next: rgba(94, 144, 255, 0.3);
   }
 }
 
@@ -253,6 +255,9 @@ body {
 }
 #highlights mark.error {
   background: var(--highlight-error);
+}
+#highlights mark.next {
+  background: var(--highlight-next);
 }
 
 .cs-editor {

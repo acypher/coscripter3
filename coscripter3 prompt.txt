@@ -1,0 +1,3 @@
+Start a new, big project in a new workspace called CoScripter3. Use Fable 5.  My local folder is "/Users/acypher/Projects/extensions/coscripter/coscripter3" 
+
+13 years ago, I created (with colleagues) a CoScripter Firefox Extension. The code is at https://github.com/jeffnichols-ibm/coscripter-extension. 

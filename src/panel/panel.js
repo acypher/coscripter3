@@ -75,6 +75,25 @@ function clearHighlight() {
   highlights.innerHTML = "";
 }
 
+// Index of the next executable step at or after fromIndex, or -1 if none.
+function nextExecutableLine(fromIndex) {
+  const lines = editor.value.split("\n");
+  for (let i = Math.max(0, fromIndex); i < lines.length; i++) {
+    if (/^\s*\*+\s+\S/.test(lines[i])) return i;
+  }
+  return -1;
+}
+
+// Highlight the step that is about to be executed (or clear if none remain).
+function highlightUpcomingStep(fromIndex = 0) {
+  const i = nextExecutableLine(fromIndex);
+  if (i === -1) {
+    clearHighlight();
+  } else {
+    setActiveLine(i, "next");
+  }
+}
+
 function syncScroll() {
   backdrop.scrollTop = editor.scrollTop;
   backdrop.scrollLeft = editor.scrollLeft;
@@ -154,7 +173,7 @@ async function loadScript(id) {
   state.stepLine = 0;
   scriptName.value = s.name;
   editor.value = s.text;
-  clearHighlight();
+  highlightUpcomingStep(0);
   await refreshLibrary();
   setStatus(`Loaded "${s.name}".`);
 }
@@ -206,7 +225,7 @@ async function stepScript() {
   if (i >= lines.length) {
     state.stepLine = 0;
     setStatus("End of script. Step reset to top.");
-    clearHighlight();
+    highlightUpcomingStep(0);
     return;
   }
   await send({ type: "RUN_STEP", line: lines[i], lineNumber: i, tabId });
@@ -266,7 +285,7 @@ function doImport(file) {
     state.currentId = null;
     state.stepLine = 0;
     scriptName.value = file.name.replace(/\.[^.]+$/, "");
-    clearHighlight();
+    highlightUpcomingStep(0);
     setStatus(`Imported "${file.name}".`);
   };
   reader.readAsText(file);
@@ -294,7 +313,8 @@ chrome.runtime.onMessage.addListener((msg) => {
         setActiveLine(msg.lineNumber, "run");
         setStatus(`Running: ${msg.text}`, "run");
       } else if (msg.status === "ok") {
-        setActiveLine(msg.lineNumber, "ok");
+        // Step finished: move the highlight to the next step about to run.
+        highlightUpcomingStep(msg.lineNumber + 1);
         setStatus(`OK: ${msg.text}`, "ok");
       } else if (msg.status === "error") {
         setActiveLine(msg.lineNumber, "error");
