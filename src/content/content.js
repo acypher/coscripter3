@@ -1,54 +1,50 @@
-// Content-script bootstrap. Declared as a classic script in the manifest, so it
-// cannot use static `import`. Instead it dynamically imports the ES modules in
-// src/core (which are web-accessible) and wires them to runtime messages.
-//
-// Responsibilities:
-//   - host the Recorder and the executor in the page
-//   - answer PING so the background worker knows the page is ready
-//   - execute one command on request and reply with the result
-//   - on (re)load, tell the background worker it is ready so recording can resume
-//     across navigations
-//
-// Re-injection safety: properties set on `window` survive in the isolated world
-// for the document's whole lifetime, including across an extension reload (which
-// invalidates the previous instance's runtime context and kills its message
-// listener). So we must NOT short-circuit on a "already loaded" flag — doing so
-// would leave a tab with no live listener, and PING would never be answered
-// ("Can't record on this page."). Instead, every injection drops the previous
-// listener and registers a fresh one bound to the current (valid) context.
+// Content-script bootstrap. Top frame handles execution; all frames can record.
 
 (() => {
   if (window.__coscripterListener) {
     try {
       chrome.runtime.onMessage.removeListener(window.__coscripterListener);
-    } catch (e) {
-      /* previous listener belonged to an invalidated context */
-    }
+    } catch (e) { /* invalidated context */ }
   }
 
+  const isTop = window === window.top;
   const base = chrome.runtime.getURL("src/core/");
+
   const ready = (async () => {
-    const [recorderMod, executorMod, commandsMod] = await Promise.all([
+    const [recorderMod, executorMod, commandsMod, labelerMod] = await Promise.all([
       import(base + "recorder.js"),
       import(base + "executor.js"),
       import(base + "commands.js"),
+      import(base + "labeler.js"),
     ]);
-    const recorder = new recorderMod.Recorder((slop) => {
-      chrome.runtime.sendMessage({ type: "RECORDED_STEP", step: slop });
-    });
-    return { recorder, execute: executorMod.execute, Command: commandsMod.Command };
+    const recorder = new recorderMod.Recorder(
+      (slop) => {
+        chrome.runtime.sendMessage({ type: "RECORDED_STEP", step: slop });
+      },
+      (url) => {
+        chrome.runtime.sendMessage({ type: "RECORDED_HISTORY", url });
+      }
+    );
+    return {
+      recorder,
+      execute: executorMod.execute,
+      checkCondition: executorMod.checkCondition,
+      preview: executorMod.preview,
+      Command: commandsMod.Command,
+      elementExists: labelerMod.elementExists,
+    };
   })();
 
   const listener = (msg, sender, sendResponse) => {
     if (!msg || !msg.type) return;
 
     if (msg.type === "PING") {
-      sendResponse({ ok: true });
-      return; // synchronous
+      sendResponse({ ok: true, top: isTop });
+      return;
     }
 
     if (msg.type === "START_REC") {
-      ready.then(({ recorder }) => recorder.start());
+      ready.then(({ recorder }) => recorder.start(msg.pdbEntries || []));
       sendResponse({ ok: true });
       return;
     }
@@ -59,28 +55,39 @@
       return;
     }
 
+    if (!isTop) return;
+
     if (msg.type === "EXECUTE") {
       ready
-        .then(({ execute, Command }) => {
-          const cmd = new Command(msg.command);
-          const result = execute(cmd);
-          sendResponse(result);
-        })
+        .then(({ execute, Command }) => execute(new Command(msg.command)))
+        .then((result) => sendResponse(result))
         .catch((e) => sendResponse({ ok: false, error: String(e) }));
-      return true; // async response
+      return true;
+    }
+
+    if (msg.type === "CHECK") {
+      ready
+        .then(({ checkCondition, Command }) => {
+          sendResponse({ ok: checkCondition(new Command(msg.command)) });
+        })
+        .catch(() => sendResponse({ ok: false }));
+      return true;
+    }
+
+    if (msg.type === "PREVIEW") {
+      ready
+        .then(({ preview, Command }) => sendResponse(preview(new Command(msg.command))))
+        .catch(() => sendResponse({ ok: false }));
+      return true;
     }
   };
 
   window.__coscripterListener = listener;
   chrome.runtime.onMessage.addListener(listener);
 
-  // Let the background worker know we are alive (used to resume recording after
-  // navigation, and as a readiness signal).
   ready.then(() => {
     try {
       chrome.runtime.sendMessage({ type: "CONTENT_READY" });
-    } catch (e) {
-      /* worker may be asleep */
-    }
+    } catch (e) { /* worker asleep */ }
   });
 })();

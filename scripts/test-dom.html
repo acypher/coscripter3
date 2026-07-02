@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>CoScripter3 DOM tests</title>
+  <style>
+    body { font-family: monospace; }
+    #results .ok { color: green; }
+    #results .fail { color: red; font-weight: bold; }
+    #fixture { border: 1px solid #ccc; padding: 10px; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <h1>CoScripter3 DOM tests</h1>
+
+  <div id="fixture">
+    <a href="#one">Alpha</a>
+    <a href="#two">Beta</a>
+    <a href="#three">Gamma</a>
+    <button>Cancel</button>
+    <button>Submit order</button>
+    <button>Submit payment</button>
+    <label>Search <input type="text" id="q" /></label>
+    <label><input type="checkbox" id="remember" /> Remember me</label>
+    <select id="color" aria-label="Color">
+      <option>Red</option>
+      <option>Blue</option>
+      <option>Green</option>
+    </select>
+    <div role="tab">Settings</div>
+  </div>
+
+  <div id="results"></div>
+  <div id="summary"></div>
+
+  <script type="module">
+    import { parseLine } from "../src/core/parser.js";
+    import { findElement } from "../src/core/labeler.js";
+    import { execute } from "../src/core/executor.js";
+
+    const results = document.getElementById("results");
+    let failed = 0, passed = 0;
+    function check(desc, cond) {
+      const div = document.createElement("div");
+      div.className = cond ? "ok" : "fail";
+      div.textContent = (cond ? "ok: " : "FAIL: ") + desc;
+      results.appendChild(div);
+      cond ? passed++ : failed++;
+    }
+    const find = (line) => findElement(parseLine(line));
+
+    // Label matching
+    check('quoted label finds link', find('click the "Beta" link')?.textContent === "Beta");
+    check('unquoted label finds button', find("click the cancel button")?.textContent === "Cancel");
+    check('partial label picks best match', find('click the "Submit payment" button')?.textContent === "Submit payment");
+
+    // Ordinals in document order
+    check("third link is Gamma", find("click the third link")?.textContent === "Gamma");
+    check("first link is Alpha", find("click the first link")?.textContent === "Alpha");
+    check('second "Submit" button in doc order', find('click the second "Submit" button')?.textContent === "Submit payment");
+    check("missing ordinal returns null", find("click the fifth link") === null);
+
+    // Name filters
+    check('filter starts with', find('click the link whose name starts with "Ga"')?.textContent === "Gamma");
+    check('filter contains with label', find('click the "Submit" button whose name contains "payment"')?.textContent === "Submit payment");
+
+    // Types
+    check('tab role', find('click the "Settings" tab')?.getAttribute("role") === "tab");
+    check("label-for textbox", find('enter "x" into the "Search" textbox')?.id === "q");
+    check("checkbox by wrapped label", find('turn on the "Remember me" checkbox')?.id === "remember");
+    check("select by aria-label", find('select "Blue" from the "Color" listbox')?.id === "color");
+
+    // Execution
+    await execute(parseLine('enter "hello" into the "Search" textbox'));
+    check("enter sets value", document.getElementById("q").value === "hello");
+    await execute(parseLine('turn on the "Remember me" checkbox'));
+    check("turn on checks", document.getElementById("remember").checked === true);
+    await execute(parseLine('turn on the "Remember me" checkbox'));
+    check("turn on is idempotent", document.getElementById("remember").checked === true);
+    await execute(parseLine('turn off the "Remember me" checkbox'));
+    check("turn off unchecks", document.getElementById("remember").checked === false);
+    await execute(parseLine('select "Blue" from the "Color" listbox'));
+    check("select picks option", document.getElementById("color").value === "Blue");
+    const res = await execute(parseLine('click the "Nonexistent" button'));
+    check("missing element reports error", res.ok === false && res.error.startsWith("Could not find"));
+
+    document.getElementById("summary").textContent =
+      failed ? `${failed} FAILED, ${passed} passed` : `ALL ${passed} PASSED`;
+    document.title = failed ? "FAILED" : "PASSED";
+  </script>
+</body>
+</html>

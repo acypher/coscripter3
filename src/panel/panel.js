@@ -1,5 +1,4 @@
-// Side panel UI logic. Talks only to the background worker, which coordinates
-// recording and playback in the page.
+// Side panel UI logic.
 
 import { listScripts, getScript, saveScript, deleteScript } from "../core/storage.js";
 
@@ -9,8 +8,8 @@ const backdrop = document.getElementById("backdrop");
 const scriptName = document.getElementById("scriptName");
 const scriptList = document.getElementById("scriptList");
 const scriptCount = document.getElementById("scriptCount");
-const libraryDetails = document.getElementById("libraryDetails");
 const statusEl = document.getElementById("status");
+const pdbEditor = document.getElementById("pdbEditor");
 
 const recordBtn = document.getElementById("recordBtn");
 const recordLabel = document.getElementById("recordLabel");
@@ -23,15 +22,30 @@ const deleteBtn = document.getElementById("deleteBtn");
 const importBtn = document.getElementById("importBtn");
 const exportBtn = document.getElementById("exportBtn");
 const importFile = document.getElementById("importFile");
+const savePdbBtn = document.getElementById("savePdbBtn");
+
+const tabScript = document.getElementById("tabScript");
+const tabData = document.getElementById("tabData");
+const panelScript = document.getElementById("panelScript");
+const panelData = document.getElementById("panelData");
+
+const userPrompt = document.getElementById("userPrompt");
+const userPromptText = document.getElementById("userPromptText");
+const continueBtn = document.getElementById("continueBtn");
+
+const errorPrompt = document.getElementById("errorPrompt");
+const errorPromptText = document.getElementById("errorPromptText");
+const retryBtn = document.getElementById("retryBtn");
+const skipBtn = document.getElementById("skipBtn");
+const stopErrorBtn = document.getElementById("stopErrorBtn");
 
 let state = {
   currentId: null,
   recording: false,
   running: false,
-  stepLine: 0, // next editor line index to try in Step mode
+  stepLine: 0,
+  lineStatus: {},
 };
-
-// ---- helpers ----
 
 function setStatus(text, kind = "") {
   statusEl.textContent = text;
@@ -54,28 +68,37 @@ function escapeHtml(s) {
     .replace(/>/g, "&gt;");
 }
 
-// Render the highlight backdrop, marking one line by status.
-function setActiveLine(lineNumber, status) {
+function renderHighlights(activeLine = -1, activeStatus = "") {
   const lines = editor.value.split("\n");
+  // One block div per line so bullets can sit in the gutter (absolutely
+  // positioned) without shifting the text out of alignment with the textarea.
   const html = lines
     .map((line, i) => {
       const safe = escapeHtml(line) || " ";
-      if (i === lineNumber && status) {
-        return `<mark class="${status}">${safe}</mark>`;
-      }
-      return safe;
+      const st = state.lineStatus[i];
+      let cls = "";
+      if (i === activeLine && activeStatus) cls = activeStatus;
+      else if (st) cls = st;
+      const isStep = /^\s*\*+\s+\S/.test(line);
+      const bullet = isStep && cls ? `<span class="cs-bullet ${cls}"></span>` : "";
+      const content = cls ? `<mark class="${cls}">${safe}</mark>` : safe;
+      return `<div class="cs-line">${bullet}${content}</div>`;
     })
-    .join("\n");
+    .join("");
   highlights.innerHTML = html;
   syncScroll();
+}
+
+function setActiveLine(lineNumber, status) {
+  renderHighlights(lineNumber, status);
   scrollLineIntoView(lineNumber);
 }
 
 function clearHighlight() {
-  highlights.innerHTML = "";
+  state.lineStatus = {};
+  renderHighlights();
 }
 
-// Index of the next executable step at or after fromIndex, or -1 if none.
 function nextExecutableLine(fromIndex) {
   const lines = editor.value.split("\n");
   for (let i = Math.max(0, fromIndex); i < lines.length; i++) {
@@ -84,14 +107,10 @@ function nextExecutableLine(fromIndex) {
   return -1;
 }
 
-// Highlight the step that is about to be executed (or clear if none remain).
 function highlightUpcomingStep(fromIndex = 0) {
   const i = nextExecutableLine(fromIndex);
-  if (i === -1) {
-    clearHighlight();
-  } else {
-    setActiveLine(i, "next");
-  }
+  if (i === -1) clearHighlight();
+  else setActiveLine(i, "next");
 }
 
 function syncScroll() {
@@ -111,8 +130,9 @@ function scrollLineIntoView(lineNumber) {
 function appendStep(slop) {
   const prefix = editor.value.length && !editor.value.endsWith("\n") ? "\n" : "";
   editor.value += `${prefix}* ${slop}\n`;
-  syncScroll();
+  renderHighlights();
   editor.scrollTop = editor.scrollHeight;
+  syncScroll();
 }
 
 function setRecording(on) {
@@ -129,14 +149,23 @@ function setRunning(on) {
   runBtn.disabled = on;
   stepBtn.disabled = on;
   recordBtn.disabled = on;
+  if (!on) {
+    userPrompt.classList.add("hidden");
+    errorPrompt.classList.add("hidden");
+  }
 }
 
-// ---- script library ----
+function showTab(name) {
+  const isScript = name === "script";
+  tabScript.classList.toggle("active", isScript);
+  tabData.classList.toggle("active", !isScript);
+  panelScript.classList.toggle("hidden", !isScript);
+  panelData.classList.toggle("hidden", isScript);
+}
 
 function formatDate(ts) {
   if (!ts) return "";
-  const d = new Date(ts);
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 async function refreshLibrary() {
@@ -178,7 +207,10 @@ async function loadScript(id) {
   setStatus(`Loaded "${s.name}".`);
 }
 
-// ---- actions ----
+async function loadPdb() {
+  const res = await send({ type: "GET_PDB" });
+  if (res && res.ok) pdbEditor.value = res.text || "";
+}
 
 async function toggleRecord() {
   if (state.recording) {
@@ -207,6 +239,7 @@ async function runScript() {
     setStatus("No active tab.", "error");
     return;
   }
+  state.lineStatus = {};
   clearHighlight();
   setStatus("Running…", "run");
   await send({ type: "RUN_SCRIPT", script: editor.value, tabId });
@@ -219,7 +252,6 @@ async function stepScript() {
     return;
   }
   const lines = editor.value.split("\n");
-  // find next executable line at or after state.stepLine
   let i = state.stepLine;
   while (i < lines.length && !/^\s*\*+\s+\S/.test(lines[i])) i++;
   if (i >= lines.length) {
@@ -238,9 +270,11 @@ function stopRun() {
 }
 
 async function doSave() {
-  const text = editor.value;
-  const name = scriptName.value.trim() || "Untitled";
-  const saved = await saveScript({ id: state.currentId, name, text });
+  const saved = await saveScript({
+    id: state.currentId,
+    name: scriptName.value.trim() || "Untitled",
+    text: editor.value,
+  });
   state.currentId = saved.id;
   await refreshLibrary();
   setStatus(`Saved "${saved.name}".`, "ok");
@@ -291,7 +325,25 @@ function doImport(file) {
   reader.readAsText(file);
 }
 
-// ---- messages from the background worker ----
+let lastPreviewLine = -1;
+
+async function previewCurrentLine() {
+  const pos = editor.selectionStart;
+  const lineNumber = editor.value.slice(0, pos).split("\n").length - 1;
+  if (lineNumber === lastPreviewLine) return;
+  lastPreviewLine = lineNumber;
+  const line = editor.value.split("\n")[lineNumber];
+  if (!line || !/^\s*\*+\s+\S/.test(line)) return;
+  const tabId = await getActiveTabId();
+  if (tabId == null) return;
+  await send({ type: "PREVIEW_STEP", line, tabId });
+}
+
+async function savePdb() {
+  const res = await send({ type: "SAVE_PDB", text: pdbEditor.value });
+  if (res && res.ok) setStatus("Your data saved.", "ok");
+  else setStatus("Could not save your data.", "error");
+}
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (!msg || !msg.type) return;
@@ -313,24 +365,74 @@ chrome.runtime.onMessage.addListener((msg) => {
         setActiveLine(msg.lineNumber, "run");
         setStatus(`Running: ${msg.text}`, "run");
       } else if (msg.status === "ok") {
-        // Step finished: move the highlight to the next step about to run.
+        state.lineStatus[msg.lineNumber] = "ok";
         highlightUpcomingStep(msg.lineNumber + 1);
         setStatus(`OK: ${msg.text}`, "ok");
+      } else if (msg.status === "skipped") {
+        state.lineStatus[msg.lineNumber] = "skipped";
+        highlightUpcomingStep(msg.lineNumber + 1);
+        setStatus("Skipped.", "ok");
       } else if (msg.status === "error") {
         setActiveLine(msg.lineNumber, "error");
         setStatus(`Error: ${msg.text}`, "error");
       }
       break;
+    case "WAIT_USER":
+      userPromptText.textContent = msg.text || "Complete the action, then click Continue.";
+      userPrompt.classList.remove("hidden");
+      errorPrompt.classList.add("hidden");
+      setActiveLine(msg.lineNumber, "run");
+      setStatus("Waiting for you…", "run");
+      break;
+    case "ERROR_PROMPT":
+      errorPromptText.textContent = msg.text || "Step failed.";
+      errorPrompt.classList.remove("hidden");
+      userPrompt.classList.add("hidden");
+      break;
+    case "PDB_UPDATED":
+      if (msg.text !== undefined) pdbEditor.value = msg.text;
+      break;
   }
 });
 
-// ---- wiring ----
+const PREVIEW_KEYS = new Set([
+  "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown",
+]);
 
 editor.addEventListener("scroll", syncScroll);
 editor.addEventListener("input", () => {
   state.stepLine = 0;
-  clearHighlight();
+  lastPreviewLine = -1; // typing shouldn't trigger a preview on the next keyup
+  renderHighlights();
 });
+editor.addEventListener("click", previewCurrentLine);
+editor.addEventListener("keyup", (e) => {
+  // Only preview when navigating between lines, not while typing.
+  if (PREVIEW_KEYS.has(e.key)) previewCurrentLine();
+});
+
+tabScript.addEventListener("click", () => showTab("script"));
+tabData.addEventListener("click", () => showTab("data"));
+
+continueBtn.addEventListener("click", () => {
+  userPrompt.classList.add("hidden");
+  send({ type: "CONTINUE_USER" });
+});
+
+retryBtn.addEventListener("click", () => {
+  errorPrompt.classList.add("hidden");
+  send({ type: "ERROR_DECISION", decision: "retry" });
+});
+skipBtn.addEventListener("click", () => {
+  errorPrompt.classList.add("hidden");
+  send({ type: "ERROR_DECISION", decision: "skip" });
+});
+stopErrorBtn.addEventListener("click", () => {
+  errorPrompt.classList.add("hidden");
+  send({ type: "ERROR_DECISION", decision: "stop" });
+  send({ type: "STOP_RUN" });
+});
+
 recordBtn.addEventListener("click", toggleRecord);
 runBtn.addEventListener("click", runScript);
 stepBtn.addEventListener("click", stepScript);
@@ -344,15 +446,18 @@ importFile.addEventListener("change", () => {
   if (importFile.files && importFile.files[0]) doImport(importFile.files[0]);
   importFile.value = "";
 });
+savePdbBtn.addEventListener("click", savePdb);
 
 async function init() {
   await refreshLibrary();
+  await loadPdb();
   const st = await send({ type: "GET_STATE" });
   if (st) {
     setRecording(!!st.recording);
     setRunning(!!st.running);
   }
   setStatus("Ready.");
+  renderHighlights();
 }
 
 init();

@@ -225,7 +225,8 @@ body {
 .cs-editor {
   margin: 0;
   border: 0;
-  padding: 12px 14px;
+  /* extra left padding is the gutter for status bullets */
+  padding: 12px 14px 12px 30px;
   font-family: var(--mono);
   font-size: 12.5px;
   line-height: 1.6;
@@ -316,4 +317,120 @@ body {
 }
 .cs-link:hover {
   text-decoration: underline;
+}
+
+.cs-tabs {
+  display: flex;
+  gap: 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 0 12px;
+}
+.cs-tab {
+  padding: 8px 14px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.cs-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.cs-panel-view.hidden {
+  display: none;
+}
+.cs-panel-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.cs-data-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 10px;
+}
+.cs-data-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.cs-data-help code {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.cs-pdb-editor {
+  flex: 1;
+  min-height: 200px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  resize: none;
+}
+
+.cs-user-prompt,
+.cs-error-prompt {
+  margin: 0 12px 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  border: 1px solid var(--border);
+}
+.cs-user-prompt.hidden,
+.cs-error-prompt.hidden {
+  display: none;
+}
+.cs-user-prompt p,
+.cs-error-prompt p {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+.cs-error-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.cs-line {
+  position: relative;
+  min-height: 1.6em;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.cs-bullet {
+  position: absolute;
+  left: -20px;
+  top: 0.45em;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.cs-bullet.run,
+.cs-bullet.next {
+  background: var(--warn);
+}
+.cs-bullet.ok {
+  background: var(--ok);
+}
+.cs-bullet.error {
+  background: var(--error);
+}
+.cs-bullet.skipped {
+  background: var(--muted);
+}
+#highlights mark.skipped {
+  background: color-mix(in srgb, var(--muted) 20%, transparent);
 }

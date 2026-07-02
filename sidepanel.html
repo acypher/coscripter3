@@ -15,37 +15,71 @@
       </div>
     </header>
 
-    <section class="cs-scripts">
-      <div class="cs-row">
-        <input id="scriptName" type="text" class="cs-name" placeholder="Untitled script" />
-        <button id="newBtn" class="cs-btn cs-btn-ghost" title="New script">New</button>
-        <button id="saveBtn" class="cs-btn" title="Save script">Save</button>
-        <button id="deleteBtn" class="cs-btn cs-btn-ghost" title="Delete script">Delete</button>
+    <nav class="cs-tabs">
+      <button id="tabScript" class="cs-tab active" type="button">Script</button>
+      <button id="tabData" class="cs-tab" type="button">Your data</button>
+    </nav>
+
+    <div id="panelScript" class="cs-panel-view">
+      <section class="cs-scripts">
+        <div class="cs-row">
+          <input id="scriptName" type="text" class="cs-name" placeholder="Untitled script" />
+          <button id="newBtn" class="cs-btn cs-btn-ghost" title="New script">New</button>
+          <button id="saveBtn" class="cs-btn" title="Save script">Save</button>
+          <button id="deleteBtn" class="cs-btn cs-btn-ghost" title="Delete script">Delete</button>
+        </div>
+        <details id="libraryDetails" class="cs-library">
+          <summary>Saved scripts (<span id="scriptCount">0</span>)</summary>
+          <ul id="scriptList" class="cs-list"></ul>
+        </details>
+      </section>
+
+      <section class="cs-controls">
+        <button id="recordBtn" class="cs-btn cs-btn-record">
+          <span class="cs-dot"></span><span id="recordLabel">Record</span>
+        </button>
+        <button id="runBtn" class="cs-btn cs-btn-run">Run</button>
+        <button id="stepBtn" class="cs-btn">Step</button>
+        <button id="stopBtn" class="cs-btn cs-btn-ghost" disabled>Stop</button>
+      </section>
+
+      <section class="cs-editor-wrap">
+        <div id="backdrop" class="cs-backdrop"><div id="highlights"></div></div>
+        <textarea
+          id="editor"
+          class="cs-editor"
+          spellcheck="false"
+          placeholder="Press Record and act in the page, or type steps like:&#10;&#10;* go to &quot;example.com&quot;&#10;* enter your &quot;name&quot; into the &quot;Search&quot; textbox&#10;* click the &quot;Search&quot; button&#10;* pause 2 seconds&#10;* if there is a &quot;Sign in&quot; button&#10;** click the &quot;Sign in&quot; button"
+        ></textarea>
+      </section>
+    </div>
+
+    <div id="panelData" class="cs-panel-view hidden">
+      <section class="cs-data-section">
+        <p class="cs-data-help">Store personal values as <code>name = value</code> lines. Reference them in scripts with <code>your "name"</code>.</p>
+        <textarea
+          id="pdbEditor"
+          class="cs-pdb-editor"
+          spellcheck="false"
+          placeholder="name = Allen&#10;email = you@example.com&#10;password = ••••••"
+        ></textarea>
+        <button id="savePdbBtn" class="cs-btn">Save your data</button>
+      </section>
+    </div>
+
+    <div id="userPrompt" class="cs-user-prompt hidden">
+      <p id="userPromptText"></p>
+      <button id="continueBtn" class="cs-btn cs-btn-run">Continue</button>
+    </div>
+
+    <div id="errorPrompt" class="cs-error-prompt hidden">
+      <p id="errorPromptText"></p>
+      <div class="cs-error-actions">
+        <button id="retryBtn" class="cs-btn">Retry</button>
+        <button id="skipBtn" class="cs-btn cs-btn-ghost">Skip</button>
+        <button id="stopErrorBtn" class="cs-btn cs-btn-ghost">Stop</button>
       </div>
-      <details id="libraryDetails" class="cs-library">
-        <summary>Saved scripts (<span id="scriptCount">0</span>)</summary>
-        <ul id="scriptList" class="cs-list"></ul>
-      </details>
-    </section>
-
-    <section class="cs-controls">
-      <button id="recordBtn" class="cs-btn cs-btn-record">
-        <span class="cs-dot"></span><span id="recordLabel">Record</span>
-      </button>
-      <button id="runBtn" class="cs-btn cs-btn-run">Run</button>
-      <button id="stepBtn" class="cs-btn">Step</button>
-      <button id="stopBtn" class="cs-btn cs-btn-ghost" disabled>Stop</button>
-    </section>
-
-    <section class="cs-editor-wrap">
-      <div id="backdrop" class="cs-backdrop"><div id="highlights"></div></div>
-      <textarea
-        id="editor"
-        class="cs-editor"
-        spellcheck="false"
-        placeholder="Press Record and act in the page, or type steps like:&#10;&#10;* go to &quot;example.com&quot;&#10;* enter &quot;hello&quot; into the &quot;Search&quot; textbox&#10;* click the &quot;Search&quot; button"
-      ></textarea>
-    </section>
+    </div>
 
     <footer class="cs-footer">
       <div id="status" class="cs-status">Ready.</div>

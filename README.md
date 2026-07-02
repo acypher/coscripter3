@@ -6,31 +6,50 @@ It is a modernization of the original [CoScripter Firefox extension](https://git
 
 ## What it does
 
-- **Record** your clicks, typing, menu selections, and page navigations into human-readable steps.
-- **Edit** the script as text — it's just readable sentences, one step per line.
-- **Replay** the whole script, or one step at a time, with the step about to run highlighted.
-- **Save** scripts locally and **import/export** them as files.
+- **Record** clicks, typing, selections, navigations, tab switches, and more into human-readable steps.
+- **Edit** scripts as plain text — readable sentences, one step per line.
+- **Replay** the whole script or one step at a time, with control flow (`if`/`else`, `repeat`).
+- **Personal database** — store `name = value` pairs and reference them as `your "name"` in any step.
+- **Mixed-initiative** — `you …` steps pause for manual action, then continue.
+- **Save** scripts locally and **import/export** as `.coscript` files.
 
 Scripts look like this:
 
 ```
 Search for homes
 * go to "google.com"
-* enter "Palo Alto homes" into the "Search" textbox
+* enter your "city" into the "Search" textbox
 * click the "Google Search" button
+* pause 2 seconds
+* if there is a "Sign in" button
+** click the "Sign in" button
+* end
+* you complete the captcha
+* repeat 3 times
+** click the "Next" button
 ```
 
-A line that starts with `*` is an executable step. Any other line is a comment.
+A line starting with `*` is an executable step. Other lines are comments. Indent with extra `*` for nested blocks (`if`, `repeat`).
 
-### Supported steps (v1)
+### Supported steps
 
-| Step | Example |
+| Category | Examples |
 | --- | --- |
-| Navigate | `* go to "example.com"` |
-| Click | `* click the "Sign in" button` / `... link` |
-| Type | `* enter "hello" into the "Search" textbox` |
-| Choose | `* select "California" from the "State" listbox` |
-| Toggle | `* click the "I agree" checkbox` / `... radio button` |
+| Navigate | `go to`, `go back`, `go forward`, `reload` |
+| Click | `click`, `control-click`, `mouseover` the `"Label" button/link/…` |
+| Input | `enter`, `put`, `append`, `select`, `turn on/off` |
+| Sections | `expand`, `collapse`, `toggle` the `"Section" section` |
+| Clipboard | `copy`, `paste`, `clip` |
+| Timing | `pause N seconds`, `wait until the "…" button` |
+| Control flow | `if there is …`, `else`, `end`, `repeat N times`, `repeat with your "counter"` |
+| Variables | `enter your "name" into …`, `increment your "counter" by 1` |
+| Tabs | `create a new tab`, `switch to the "…" tab`, `close the tab` |
+| Mixed-initiative | `you click the confirmation button` |
+| Verify | `verify that the "Success" button` |
+
+Ordinals and disambiguators: `click the second "Search" button`, `the link whose name starts with "Sign"`, `click the third link` (ordinals count in page order). Labels don't have to be quoted — `click the search button` works too.
+
+During Run, a step that can't find its target yet is retried automatically for a few seconds (useful while a page is still loading) before the Retry / Skip / Stop prompt appears. Clicking a link that opens a new tab automatically continues the run in that tab.
 
 ## Install (load unpacked)
 
@@ -44,42 +63,43 @@ There is no build step — Chrome loads the source directly.
 ## How to use
 
 1. Open the **side panel** (click the toolbar icon).
-2. Click **Record** and perform a task on the page. Steps appear in the editor as you go.
-3. Click **Stop recording** when done.
-4. Click **Run** to replay, or **Step** to advance one step at a time. **Stop** halts a run.
-5. Give the script a name and click **Save** to keep it. Use **Import**/**Export** to move scripts as `.coscript` files.
+2. Optional: open the **Your data** tab and add personal values (`name = Allen`).
+3. Click **Record** and perform a task. Steps appear in the editor.
+4. Click **Stop recording** when done.
+5. Click **Run** to replay, or **Step** for one step at a time.
+6. On errors during Run: **Retry**, **Skip**, or **Stop**.
+7. On `you …` steps: complete the action, then click **Continue**.
+8. Save scripts by name; use Import/Export for `.coscript` files.
 
-> Recording and replay only work on regular `http(s)` pages, not on `chrome://` pages or the Chrome Web Store.
+> Recording and replay work on regular `http(s)` pages, not on `chrome://` or the Web Store.
 
 ## Architecture
 
 ```
-sidepanel.html + src/panel/    Side panel UI (script list, editor, controls)
-background.js                  Service worker: coordinates recording & playback
-src/content/content.js         Injected per page; hosts the recorder + executor
+sidepanel.html + src/panel/    Side panel UI (script editor, your data, controls)
+background.js                  Service worker: recording, playback, control flow
+src/content/content.js         Injected per page/frame; recorder + executor
 src/core/commands.js           Command model + slop serialization
-src/core/parser.js             Sloppy-script parser
-src/core/labeler.js            Maps labels <-> DOM elements
-src/core/recorder.js           Turns user actions into steps
+src/core/parser.js             ClearScript parser (strict + sloppy fallback)
+src/core/labeler.js            Label ↔ DOM matching (ordinals, filters, frames)
+src/core/recorder.js           User actions → steps
 src/core/executor.js           Runs one step against the page
-src/core/storage.js            Local script storage (chrome.storage)
+src/core/runner.js             Control-flow program counter (if/repeat)
+src/core/personaldb.js         Personal database (your "X" variables)
+src/core/storage.js            Local script storage
 ```
-
-The side panel talks only to the background worker, which relays recorded steps
-back to the panel and drives playback one command at a time (handling `go to`
-navigations itself, then re-injecting the content script on the new page).
 
 ## Status / roadmap
 
-This is the v1 end-to-end skeleton. Not yet implemented (planned for later):
+**Implemented (v0.4):** ClearScript language subset (quoted and unquoted labels, ordinals, name filters), control flow, personal database, mixed-initiative steps, cross-tab recording and playback (runs follow link-opened tabs), automatic wait-and-retry for slow pages, password filtering, step preview/highlighting, error retry/skip.
 
-- Sharing server / script wiki, accounts, and search.
-- Scratch space / data-extraction tables and parameterized variables.
-- Cross-frame and cross-window recording, and dialog automation.
-- Chrome Web Store packaging.
+Unit tests live in `scripts/` — run `node scripts/test-parser.mjs`, `node scripts/test-runner.mjs`, `node scripts/test-nav-logic.mjs`, `node scripts/test-media-label.mjs`.
+
+**Planned (Phase 6 — scratch space):** Spreadsheet tables (Vegemite), data extraction mode, repeat-over-rows.
+
+**Planned (Phase 7 — sharing):** Wiki server / script sharing, accounts, search.
 
 ## Credits
 
 Original CoScripter was created at the IBM Almaden Research Center (led by Allen
-Cypher), formerly known as **Koala** — hence the koala mascot. Licensed under the
-Mozilla Public License.
+Cypher), formerly known as **Koala**. Licensed under the Mozilla Public License.

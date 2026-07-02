@@ -1,17 +1,19 @@
-// Executor: runs a single command against the live page. The counterpart of
-// coscripter-execution-engine.js. Navigation (go to) is handled by the
-// background worker, not here, because it requires a tab-level reload.
+// Executor: runs a single command against the live page.
 
 import { ACTIONS, TYPES } from "./commands.js";
-import { findElement } from "./labeler.js";
+import { findElementInFrames, elementExists } from "./labeler.js";
 
 const HIGHLIGHT_CLASS = "__coscripter_highlight__";
+let clipboardCache = "";
 
 function ensureHighlightStyle() {
   if (document.getElementById("__coscripter_style__")) return;
   const style = document.createElement("style");
   style.id = "__coscripter_style__";
-  style.textContent = `.${HIGHLIGHT_CLASS}{outline:3px solid #ff5a36 !important;outline-offset:2px !important;transition:outline 0.1s;}`;
+  style.textContent = `
+    .${HIGHLIGHT_CLASS}{outline:3px solid #ff5a36 !important;outline-offset:2px !important;transition:outline 0.1s;}
+    .__coscripter_preview__{outline:2px dashed #2f6df6 !important;outline-offset:2px !important;}
+  `;
   (document.head || document.documentElement).appendChild(style);
 }
 
@@ -20,9 +22,7 @@ function flash(el) {
     ensureHighlightStyle();
     el.classList.add(HIGHLIGHT_CLASS);
     setTimeout(() => el.classList.remove(HIGHLIGHT_CLASS), 700);
-  } catch (e) {
-    /* ignore */
-  }
+  } catch (e) { /* ignore */ }
 }
 
 function fire(el, type) {
@@ -30,89 +30,244 @@ function fire(el, type) {
 }
 
 function setNativeValue(el, value) {
-  // React and other frameworks track the value via the property descriptor;
-  // setting through the prototype setter makes the change "stick".
   const proto = Object.getPrototypeOf(el);
   const desc = Object.getOwnPropertyDescriptor(proto, "value");
-  if (desc && desc.set) {
-    desc.set.call(el, value);
+  if (desc && desc.set) desc.set.call(el, value);
+  else el.value = value;
+}
+
+function getText(el) {
+  if (el.isContentEditable) return (el.textContent || "").trim();
+  if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") return el.value || "";
+  return (el.textContent || "").trim();
+}
+
+function mouseEvent(el, type, opts = {}) {
+  const rect = el.getBoundingClientRect();
+  const evt = new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    view: el.ownerDocument.defaultView,
+    clientX: rect.left + rect.width / 2,
+    clientY: rect.top + rect.height / 2,
+    ctrlKey: !!opts.ctrlKey,
+    shiftKey: !!opts.shiftKey,
+  });
+  el.dispatchEvent(evt);
+}
+
+function doClick(el, opts = {}) {
+  el.focus({ preventScroll: true });
+  if (opts.ctrlKey) {
+    mouseEvent(el, "mousedown", opts);
+    mouseEvent(el, "mouseup", opts);
+    mouseEvent(el, "click", opts);
   } else {
-    el.value = value;
+    el.click();
   }
 }
 
-// Execute one command. Returns { ok, error?, label? }.
-export function execute(command) {
-  const el = findElement(command);
-  if (!el) {
-    return {
-      ok: false,
-      error: `Could not find ${command.type || "element"} "${command.label || command.value}".`,
-    };
-  }
+function setChecked(el, checked) {
+  if (el.checked === checked) return;
+  el.click();
+}
 
+function selectOption(el, value) {
+  const target = (value || "").trim().toLowerCase();
+  for (const opt of el.options) {
+    const text = (opt.textContent || "").trim().toLowerCase();
+    const val = (opt.value || "").trim().toLowerCase();
+    if (text === target || val === target) {
+      el.value = opt.value;
+      fire(el, "input");
+      fire(el, "change");
+      return true;
+    }
+  }
+  for (const opt of el.options) {
+    const text = (opt.textContent || "").trim().toLowerCase();
+    if (text.includes(target)) {
+      el.value = opt.value;
+      fire(el, "input");
+      fire(el, "change");
+      return true;
+    }
+  }
+  return false;
+}
+
+function toggleSection(el) {
+  if (el.tagName === "DETAILS") {
+    el.open = !el.open;
+    return;
+  }
+  const expanded = el.getAttribute("aria-expanded");
+  if (expanded !== null) {
+    el.setAttribute("aria-expanded", expanded === "true" ? "false" : "true");
+  }
+  doClick(el);
+}
+
+function expandSection(el) {
+  if (el.tagName === "DETAILS" && !el.open) el.open = true;
+  else if (el.getAttribute("aria-expanded") === "false") doClick(el);
+}
+
+function collapseSection(el) {
+  if (el.tagName === "DETAILS" && el.open) el.open = false;
+  else if (el.getAttribute("aria-expanded") === "true") doClick(el);
+}
+
+async function copyToClipboard(text) {
+  clipboardCache = text;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) { /* fallback to cache */ }
+}
+
+async function readClipboard() {
+  try {
+    const t = await navigator.clipboard.readText();
+    if (t) return t;
+  } catch (e) { /* ignore */ }
+  return clipboardCache;
+}
+
+export function checkCondition(command) {
+  const probe = { ...command, action: ACTIONS.THERE_IS };
+  return elementExists(probe, document);
+}
+
+export function preview(command) {
+  const el = findElementInFrames(command, document);
+  if (!el) return { ok: false, error: "Not found." };
   try {
     el.scrollIntoView({ block: "center", inline: "center" });
-  } catch (e) {
-    /* ignore */
+    flash(el);
+  } catch (e) { /* ignore */ }
+  return { ok: true };
+}
+
+export async function execute(command) {
+  if (command.action === ACTIONS.PAUSE) {
+    await new Promise((r) => setTimeout(r, (command.seconds || 1) * 1000));
+    return { ok: true };
   }
-  flash(el);
+
+  if (command.action === ACTIONS.VERIFY) {
+    if (!elementExists(command, document)) {
+      return { ok: false, error: `Verify failed: ${command.describe()}` };
+    }
+    return { ok: true };
+  }
+
+  if (command.action === ACTIONS.THERE_IS) {
+    return { ok: elementExists(command, document) };
+  }
+
+  const el = findElementInFrames(command, document);
+  if (!el && command.needsPage !== false) {
+    const needsEl = ![
+      ACTIONS.PAUSE, ACTIONS.VERIFY, ACTIONS.THERE_IS,
+    ].includes(command.action);
+    if (needsEl) {
+      return {
+        ok: false,
+        error: `Could not find ${command.type || "element"} "${command.label || command.value}".`,
+      };
+    }
+  }
+
+  if (el) {
+    try { el.scrollIntoView({ block: "center", inline: "center" }); } catch (e) { /* ignore */ }
+    flash(el);
+  }
 
   switch (command.action) {
-    case ACTIONS.CLICK: {
-      if (command.type === TYPES.CHECKBOX || command.type === TYPES.RADIO) {
-        // Click toggles; only click if needed to reach a checked state.
-        if (!el.checked) {
-          el.click();
-        }
-      } else {
-        el.focus({ preventScroll: true });
-        el.click();
-      }
+    case ACTIONS.CLICK:
+    case ACTIONS.CONTROL_CLICK:
+      doClick(el, { ctrlKey: command.ctrlKey || command.action === ACTIONS.CONTROL_CLICK, shiftKey: command.shiftKey });
       return { ok: true };
-    }
 
-    case ACTIONS.ENTER: {
+    case ACTIONS.MOUSEOVER:
+      mouseEvent(el, "mouseover");
+      mouseEvent(el, "mouseenter");
+      return { ok: true };
+
+    case ACTIONS.TURN_ON:
+      if (command.type === TYPES.CHECKBOX || command.type === TYPES.RADIO) setChecked(el, true);
+      else doClick(el);
+      return { ok: true };
+
+    case ACTIONS.TURN_OFF:
+      if (command.type === TYPES.CHECKBOX || command.type === TYPES.RADIO) setChecked(el, false);
+      else doClick(el);
+      return { ok: true };
+
+    case ACTIONS.TOGGLE:
+      if (command.type === TYPES.SECTION) toggleSection(el);
+      else if (command.type === TYPES.CHECKBOX || command.type === TYPES.RADIO) doClick(el);
+      else doClick(el);
+      return { ok: true };
+
+    case ACTIONS.EXPAND:
+      expandSection(el);
+      return { ok: true };
+
+    case ACTIONS.COLLAPSE:
+      collapseSection(el);
+      return { ok: true };
+
+    case ACTIONS.ENTER:
+    case ACTIONS.PUT:
       el.focus({ preventScroll: true });
-      if (el.isContentEditable) {
-        el.textContent = command.value;
-      } else {
-        setNativeValue(el, command.value);
-      }
+      if (el.isContentEditable) el.textContent = command.value;
+      else setNativeValue(el, command.value);
+      fire(el, "input");
+      fire(el, "change");
+      return { ok: true };
+
+    case ACTIONS.APPEND: {
+      el.focus({ preventScroll: true });
+      const existing = getText(el);
+      const next = existing + command.value;
+      if (el.isContentEditable) el.textContent = next;
+      else setNativeValue(el, next);
       fire(el, "input");
       fire(el, "change");
       return { ok: true };
     }
 
-    case ACTIONS.SELECT: {
-      const target = (command.value || "").trim().toLowerCase();
-      let matched = false;
-      for (const opt of el.options) {
-        const text = (opt.textContent || "").trim().toLowerCase();
-        const val = (opt.value || "").trim().toLowerCase();
-        if (text === target || val === target) {
-          el.value = opt.value;
-          matched = true;
-          break;
-        }
-      }
-      if (!matched) {
-        // Fall back to a contains match.
-        for (const opt of el.options) {
-          const text = (opt.textContent || "").trim().toLowerCase();
-          if (text.includes(target)) {
-            el.value = opt.value;
-            matched = true;
-            break;
-          }
-        }
-      }
-      if (!matched) {
+    case ACTIONS.SELECT:
+      if (!selectOption(el, command.value)) {
         return { ok: false, error: `No option "${command.value}" in list "${command.label}".` };
       }
+      return { ok: true };
+
+    case ACTIONS.COPY:
+    case ACTIONS.CLIP: {
+      const text = getText(el);
+      await copyToClipboard(text);
+      return { ok: true };
+    }
+
+    case ACTIONS.PASTE: {
+      const contents = await readClipboard();
+      el.focus({ preventScroll: true });
+      if (el.isContentEditable) el.textContent = contents;
+      else setNativeValue(el, contents);
       fire(el, "input");
       fire(el, "change");
       return { ok: true };
+    }
+
+    case ACTIONS.WAIT: {
+      const deadline = Date.now() + 30000;
+      while (Date.now() < deadline) {
+        if (elementExists(command, document)) return { ok: true };
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      return { ok: false, error: `Timed out waiting for ${command.label}.` };
     }
 
     default:
