@@ -68,6 +68,8 @@ If you already had CoScripter3 loaded unpacked **before** this key was added, re
 
 To share a script with someone else, use **Export** (`.coscript` file) and send the file — email, GitHub, Drive, etc. They use **Import** to open it. In-extension wiki sharing is planned for Phase 7.
 
+The matching **private** signing key must live **outside** this folder (e.g. `../coscripter3-signing-key.pem` next to the repo). Chrome warns if a `.pem` is inside the extension directory when you load unpacked.
+
 ## How to use
 
 1. Open the **side panel** (click the toolbar icon).
