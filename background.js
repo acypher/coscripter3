@@ -3,7 +3,14 @@
 import { parseScript, parseLine, getSlop } from "./src/core/parser.js";
 import { ACTIONS, Command } from "./src/core/commands.js";
 import { ScriptRunner } from "./src/core/runner.js";
-import { PersonalDB } from "./src/core/personaldb.js";
+import {
+  PersonalDB,
+  hasStoredCrypto,
+  isUnlocked,
+  lock,
+  setupPassword,
+  unlockWithPassword,
+} from "./src/core/personaldb.js";
 
 const SESSION_KEY = "coscripter_session";
 
@@ -75,6 +82,10 @@ function trackRecordingTab(tabId) {
 
 function notifyPanel(message) {
   chrome.runtime.sendMessage(message).catch(() => {});
+}
+
+function pdbEntriesForRecording(db) {
+  return db.entries.filter((e) => !e.masked);
 }
 
 const TYPED_NAV_TRANSITIONS = [
@@ -317,8 +328,15 @@ async function checkCondition(cmd, tabId) {
   }
 }
 
+function personalLookupError(resolved) {
+  if (!resolved.lookupBlocked) return null;
+  return `Unlock your data to use private value "${resolved.blockedKey}".`;
+}
+
 async function runOne(cmd, tabId, db) {
   const resolved = await resolveCommand(cmd, db);
+  const blocked = personalLookupError(resolved);
+  if (blocked) return { ok: false, error: blocked };
 
   if (resolved.action === ACTIONS.YOU) {
     runState.waitingForUser = true;
@@ -573,7 +591,7 @@ async function armRecordingTab(tabId) {
   const db = await PersonalDB.load();
   chrome.tabs.sendMessage(tabId, {
     type: "START_REC",
-    pdbEntries: db.entries,
+    pdbEntries: pdbEntriesForRecording(db),
   }).catch(() => {});
 }
 
@@ -590,7 +608,7 @@ async function handle(msg, sender, sendResponse) {
         const db = await PersonalDB.load();
         chrome.tabs.sendMessage(sender.tab.id, {
           type: "START_REC",
-          pdbEntries: db.entries,
+          pdbEntries: pdbEntriesForRecording(db),
         }).catch(() => {});
       }
       sendResponse({ ok: true });
@@ -622,15 +640,101 @@ async function handle(msg, sender, sendResponse) {
 
     case "GET_PDB": {
       const db = await PersonalDB.load();
-      sendResponse({ ok: true, text: db.text });
+      sendResponse({
+        ok: true,
+        text: db.toDisplayText(),
+        unlocked: isUnlocked(),
+        hasPrivate: db.hasPrivateEntries(),
+      });
       return;
     }
 
     case "SAVE_PDB": {
       const db = await PersonalDB.load();
       db.updateFromText(msg.text || "");
-      await db.save();
-      sendResponse({ ok: true });
+      const wantsNewPrivate = db.entries.some((e) => e.private && !e.masked);
+      if (wantsNewPrivate && !(await hasStoredCrypto())) {
+        sendResponse({ ok: false, needSetupPassword: true });
+        return;
+      }
+      try {
+        await db.save();
+        sendResponse({
+          ok: true,
+          text: db.toDisplayText(),
+          unlocked: isUnlocked(),
+          hasPrivate: db.hasPrivateEntries(),
+        });
+      } catch (e) {
+        const message = String(e.message || e);
+        sendResponse({
+          ok: false,
+          error: message,
+          needUnlock: message.includes("Unlock"),
+          needSetupPassword: message.includes("add or edit private"),
+        });
+      }
+      return;
+    }
+
+    case "UNLOCK_PDB": {
+      const result = await unlockWithPassword(msg.password || "");
+      if (!result.ok) {
+        sendResponse(result);
+        return;
+      }
+      const db = await PersonalDB.load();
+      sendResponse({
+        ok: true,
+        text: db.toDisplayText(),
+        unlocked: true,
+        hasPrivate: db.hasPrivateEntries(),
+      });
+      return;
+    }
+
+    case "SETUP_PDB_PASSWORD": {
+      const setup = await setupPassword(msg.password || "");
+      if (!setup.ok) {
+        sendResponse(setup);
+        return;
+      }
+      const db = await PersonalDB.load();
+      db.updateFromText(msg.text || "");
+      try {
+        await db.save();
+        sendResponse({
+          ok: true,
+          text: db.toDisplayText(),
+          unlocked: true,
+          hasPrivate: db.hasPrivateEntries(),
+        });
+      } catch (e) {
+        lock();
+        sendResponse({ ok: false, error: String(e.message || e) });
+      }
+      return;
+    }
+
+    case "LOCK_PDB": {
+      lock();
+      const db = await PersonalDB.load();
+      sendResponse({
+        ok: true,
+        text: db.toDisplayText(),
+        unlocked: false,
+        hasPrivate: db.hasPrivateEntries(),
+      });
+      return;
+    }
+
+    case "PDB_AUTH_STATE": {
+      const db = await PersonalDB.load();
+      sendResponse({
+        ok: true,
+        unlocked: isUnlocked(),
+        hasPrivate: db.hasPrivateEntries(),
+      });
       return;
     }
 
@@ -681,7 +785,7 @@ async function handle(msg, sender, sendResponse) {
         const db = await PersonalDB.load();
         chrome.tabs.sendMessage(tabId, {
           type: "START_REC",
-          pdbEntries: db.entries,
+          pdbEntries: pdbEntriesForRecording(db),
         }).catch(() => {});
       }
       notifyPanel({ type: "STATE", recording: true });

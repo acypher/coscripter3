@@ -23,6 +23,13 @@ const importBtn = document.getElementById("importBtn");
 const exportBtn = document.getElementById("exportBtn");
 const importFile = document.getElementById("importFile");
 const savePdbBtn = document.getElementById("savePdbBtn");
+const pdbAuth = document.getElementById("pdbAuth");
+const pdbAuthHint = document.getElementById("pdbAuthHint");
+const pdbPassword = document.getElementById("pdbPassword");
+const pdbUnlockBtn = document.getElementById("pdbUnlockBtn");
+const pdbLockBtn = document.getElementById("pdbLockBtn");
+
+let pdbAuthState = { unlocked: false, hasPrivate: false, needsSetup: false };
 
 const tabScript = document.getElementById("tabScript");
 const tabData = document.getElementById("tabData");
@@ -207,9 +214,51 @@ async function loadScript(id) {
   setStatus(`Loaded "${s.name}".`);
 }
 
+function updatePdbAuthUi() {
+  const showAuth = pdbAuthState.hasPrivate || pdbAuthState.needsSetup;
+  pdbAuth.classList.toggle("hidden", !showAuth);
+  pdbEditor.classList.toggle("cs-pdb-locked", pdbAuthState.hasPrivate && !pdbAuthState.unlocked);
+
+  if (pdbAuthState.needsSetup) {
+    pdbAuthHint.textContent = "Set a password to encrypt private entries.";
+    pdbUnlockBtn.textContent = "Set password";
+    pdbLockBtn.classList.add("hidden");
+    return;
+  }
+
+  if (pdbAuthState.unlocked) {
+    pdbAuthHint.textContent = "Private values are unlocked for this session.";
+    pdbUnlockBtn.classList.add("hidden");
+    pdbLockBtn.classList.remove("hidden");
+    return;
+  }
+
+  pdbAuthHint.textContent = "Log in to view or use private values in scripts.";
+  pdbUnlockBtn.textContent = "Unlock";
+  pdbUnlockBtn.classList.remove("hidden");
+  pdbLockBtn.classList.add("hidden");
+}
+
+function applyPdbResponse(res) {
+  if (!res || !res.ok) return;
+  if (res.text !== undefined) pdbEditor.value = res.text;
+  pdbAuthState.unlocked = !!res.unlocked;
+  pdbAuthState.hasPrivate = !!res.hasPrivate;
+  pdbAuthState.needsSetup = false;
+  updatePdbAuthUi();
+}
+
 async function loadPdb() {
   const res = await send({ type: "GET_PDB" });
-  if (res && res.ok) pdbEditor.value = res.text || "";
+  if (res && res.ok) {
+    pdbEditor.value = res.text || "";
+    pdbAuthState = {
+      unlocked: !!res.unlocked,
+      hasPrivate: !!res.hasPrivate,
+      needsSetup: false,
+    };
+    updatePdbAuthUi();
+  }
 }
 
 async function toggleRecord() {
@@ -341,8 +390,64 @@ async function previewCurrentLine() {
 
 async function savePdb() {
   const res = await send({ type: "SAVE_PDB", text: pdbEditor.value });
-  if (res && res.ok) setStatus("Your data saved.", "ok");
-  else setStatus("Could not save your data.", "error");
+  if (res && res.ok) {
+    applyPdbResponse(res);
+    setStatus("Your data saved.", "ok");
+    return;
+  }
+  if (res && res.needSetupPassword) {
+    pdbAuthState.needsSetup = true;
+    pdbAuthState.hasPrivate = true;
+    updatePdbAuthUi();
+    setStatus("Set a password before saving private entries.", "error");
+    pdbPassword.focus();
+    return;
+  }
+  if (res && res.needUnlock) {
+    setStatus("Unlock your data to save private values.", "error");
+    pdbPassword.focus();
+    return;
+  }
+  setStatus((res && res.error) || "Could not save your data.", "error");
+}
+
+async function unlockPdb() {
+  const password = pdbPassword.value;
+  if (!password) {
+    setStatus("Enter your password.", "error");
+    return;
+  }
+  if (pdbAuthState.needsSetup) {
+    const res = await send({
+      type: "SETUP_PDB_PASSWORD",
+      password,
+      text: pdbEditor.value,
+    });
+    pdbPassword.value = "";
+    if (res && res.ok) {
+      applyPdbResponse(res);
+      setStatus("Private data saved and encrypted.", "ok");
+      return;
+    }
+    setStatus((res && res.error) || "Could not set password.", "error");
+    return;
+  }
+  const res = await send({ type: "UNLOCK_PDB", password });
+  pdbPassword.value = "";
+  if (res && res.ok) {
+    applyPdbResponse(res);
+    setStatus("Private data unlocked.", "ok");
+    return;
+  }
+  setStatus((res && res.error) || "Could not unlock.", "error");
+}
+
+async function lockPdb() {
+  const res = await send({ type: "LOCK_PDB" });
+  if (res && res.ok) {
+    applyPdbResponse(res);
+    setStatus("Private data locked.", "ok");
+  }
 }
 
 chrome.runtime.onMessage.addListener((msg) => {
@@ -391,6 +496,11 @@ chrome.runtime.onMessage.addListener((msg) => {
       break;
     case "PDB_UPDATED":
       if (msg.text !== undefined) pdbEditor.value = msg.text;
+      break;
+    case "PDB_AUTH":
+      pdbAuthState.unlocked = !!msg.unlocked;
+      pdbAuthState.hasPrivate = !!msg.hasPrivate;
+      updatePdbAuthUi();
       break;
   }
 });
@@ -447,6 +557,11 @@ importFile.addEventListener("change", () => {
   importFile.value = "";
 });
 savePdbBtn.addEventListener("click", savePdb);
+pdbUnlockBtn.addEventListener("click", unlockPdb);
+pdbLockBtn.addEventListener("click", lockPdb);
+pdbPassword.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") unlockPdb();
+});
 
 async function init() {
   await refreshLibrary();

@@ -381,6 +381,48 @@ body {
   line-height: 1.6;
   resize: none;
 }
+.cs-pdb-editor.cs-pdb-locked {
+  border-color: color-mix(in srgb, var(--warn) 35%, var(--border));
+}
+.cs-pdb-auth {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warn) 8%, var(--panel));
+}
+.cs-pdb-auth.hidden {
+  display: none;
+}
+.cs-pdb-auth-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.cs-pdb-auth-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.cs-pdb-password {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+}
+.cs-pdb-auth-row .cs-btn {
+  width: auto;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 6px 12px;
+}
 
 .cs-user-prompt,
 .cs-error-prompt {

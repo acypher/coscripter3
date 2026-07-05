@@ -56,12 +56,20 @@
 
     <div id="panelData" class="cs-panel-view hidden">
       <section class="cs-data-section">
-        <p class="cs-data-help">Store personal values as <code>name = value</code> lines. Reference them in scripts with <code>your "name"</code>.</p>
+        <p class="cs-data-help">Store personal values as <code>name = value</code> lines. Reference them in scripts with <code>your "name"</code>. Prefix a key with <code>*</code> for private data (encrypted; unlock to use in scripts).</p>
+        <div id="pdbAuth" class="cs-pdb-auth hidden">
+          <p id="pdbAuthHint" class="cs-pdb-auth-hint"></p>
+          <div class="cs-pdb-auth-row">
+            <input type="password" id="pdbPassword" class="cs-pdb-password" placeholder="Password" autocomplete="current-password" />
+            <button id="pdbUnlockBtn" class="cs-btn" type="button">Unlock</button>
+            <button id="pdbLockBtn" class="cs-btn cs-btn-ghost hidden" type="button">Lock</button>
+          </div>
+        </div>
         <textarea
           id="pdbEditor"
           class="cs-pdb-editor"
           spellcheck="false"
-          placeholder="name = Allen&#10;email = you@example.com&#10;password = ••••••"
+          placeholder="name = Allen&#10;email = you@example.com&#10;*password = my-secret"
         ></textarea>
         <button id="savePdbBtn" class="cs-btn">Save your data</button>
       </section>

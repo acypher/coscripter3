@@ -3,6 +3,7 @@
 
 # Release credentials (never commit)
 scripts/release.env
+.keys/
 
 # Editor / OS cruft
 *.swp

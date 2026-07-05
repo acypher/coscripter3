@@ -9,7 +9,7 @@ It is a modernization of the original [CoScripter Firefox extension](https://git
 - **Record** clicks, typing, selections, navigations, tab switches, and more into human-readable steps.
 - **Edit** scripts as plain text — readable sentences, one step per line.
 - **Replay** the whole script or one step at a time, with control flow (`if`/`else`, `repeat`).
-- **Personal database** — store `name = value` pairs and reference them as `your "name"` in any step.
+- **Personal database** — store `name = value` pairs and reference them as `your "name"` in any step. Prefix a key with `*` (e.g. `*password = …`) for private values: encrypted at rest, masked in the UI, and usable in scripts only after you unlock with your password.
 - **Mixed-initiative** — `you …` steps pause for manual action, then continue.
 - **Save** scripts locally and **import/export** as `.coscript` files.
 
@@ -60,10 +60,18 @@ During Run, a step that can't find its target yet is retried automatically for a
 
 There is no build step — Chrome loads the source directly.
 
+The manifest includes a public `key`, so every install of this build gets the same extension ID (`ppmgbdbglofohigkfpnnnjncfigglgbe`). That keeps local script storage stable when you reload from this repo. Each user still has their own saved scripts in `chrome.storage.local` on their machine — the shared ID does not merge data between people.
+
+If you already had CoScripter3 loaded unpacked **before** this key was added, remove the old entry on `chrome://extensions` and load this folder again. Export any scripts you care about first; storage from the old ID will not carry over.
+
+### Sharing scripts
+
+To share a script with someone else, use **Export** (`.coscript` file) and send the file — email, GitHub, Drive, etc. They use **Import** to open it. In-extension wiki sharing is planned for Phase 7.
+
 ## How to use
 
 1. Open the **side panel** (click the toolbar icon).
-2. Optional: open the **Your data** tab and add personal values (`name = Allen`).
+2. Optional: open the **Your data** tab and add personal values (`name = Allen`). Use `*key = value` for secrets (password-protected and encrypted).
 3. Click **Record** and perform a task. Steps appear in the editor.
 4. Click **Stop recording** when done.
 5. Click **Run** to replay, or **Step** for one step at a time.
