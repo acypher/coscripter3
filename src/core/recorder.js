@@ -12,10 +12,12 @@ export class Recorder {
     this._onClick = this._handleClick.bind(this);
     this._onChange = this._handleChange.bind(this);
     this._onPointerDown = this._handlePointerDown.bind(this);
+    this._onDblClick = this._handleDblClick.bind(this);
     this._onPopState = this._handlePopState.bind(this);
     this._onPageShow = this._handlePageShow.bind(this);
     this._lastSlop = null;
     this._lastTime = 0;
+    this._clickDeferTimer = null;
     this._recentVideoLabel = "";
   }
 
@@ -37,6 +39,7 @@ export class Recorder {
     this.active = true;
     this._recentVideoLabel = "";
     document.addEventListener("click", this._onClick, true);
+    document.addEventListener("dblclick", this._onDblClick, true);
     document.addEventListener("pointerdown", this._onPointerDown, true);
     document.addEventListener("change", this._onChange, true);
     if (window === window.top) {
@@ -49,6 +52,7 @@ export class Recorder {
     if (!this.active) return;
     this.active = false;
     document.removeEventListener("click", this._onClick, true);
+    document.removeEventListener("dblclick", this._onDblClick, true);
     document.removeEventListener("pointerdown", this._onPointerDown, true);
     document.removeEventListener("change", this._onChange, true);
     if (window === window.top) {
@@ -85,18 +89,33 @@ export class Recorder {
     } catch (e) { /* worker asleep */ }
   }
 
-  _recordClick(event, desc) {
+  _recordClick(event, desc, { doubleClick = false } = {}) {
     if (desc.type === TYPES.CHECKBOX || desc.type === TYPES.RADIO) return;
     if (desc.type === TYPES.LINK && desc.label) {
       this._recentVideoLabel = desc.label;
     }
+    const shift = !!(event.shiftKey);
+    const ctrl = !!(event.ctrlKey || event.metaKey);
+    let action = ACTIONS.CLICK;
+    if (doubleClick) action = ACTIONS.DOUBLE_CLICK;
+    else if (ctrl) action = ACTIONS.CONTROL_CLICK;
     const cmd = new Command({
-      action: event.ctrlKey || event.metaKey ? ACTIONS.CONTROL_CLICK : ACTIONS.CLICK,
+      action,
       type: desc.type,
       label: desc.label,
-      ctrlKey: !!(event.ctrlKey || event.metaKey),
+      ctrlKey: ctrl && !doubleClick,
+      shiftKey: shift && !doubleClick && !ctrl,
     });
     this._record(cmd);
+  }
+
+  _handleDblClick(event) {
+    if (!this.active) return;
+    const desc = clickTargetFromEvent(event, this._recentVideoLabel);
+    if (!desc) return;
+    if (isMediaElement(desc.element)) return;
+    clearTimeout(this._clickDeferTimer);
+    this._recordClick(event, desc, { doubleClick: true });
   }
 
   _handlePointerDown(event) {
@@ -111,7 +130,10 @@ export class Recorder {
     const desc = clickTargetFromEvent(event, this._recentVideoLabel);
     if (!desc) return;
     if (isMediaElement(desc.element)) return;
-    this._recordClick(event, desc);
+    clearTimeout(this._clickDeferTimer);
+    this._clickDeferTimer = setTimeout(() => {
+      this._recordClick(event, desc);
+    }, 250);
   }
 
   _handleChange(event) {

@@ -299,16 +299,30 @@ export class PersonalDB {
     return this.increment(key, -by);
   }
 
-  resolve(command) {
-    const resolved = { ...command };
-    const key = command.personalKey || command.value || command.label || command.location;
-
-    const applyPersonal = (field, isPersonal) => {
-      if (!isPersonal || !key) return;
+  resolveCompareSide(side) {
+    if (!side) return { value: "" };
+    if (side.isPersonal) {
+      const key = side.key || side.value;
       const val = this.lookup(key);
       if (val === undefined && this.isPrivateKey(key)) {
+        return { blocked: true, key };
+      }
+      return { value: val ?? "" };
+    }
+    return { value: side.value ?? "" };
+  }
+
+  resolve(command) {
+    const resolved = { ...command };
+    const key = command.personalKey || command.value || command.label || command.location || command.findTerm;
+
+    const applyPersonal = (field, isPersonal, keyOverride) => {
+      const k = keyOverride || command.personalKey || command[field];
+      if (!isPersonal || !k) return;
+      const val = this.lookup(k);
+      if (val === undefined && this.isPrivateKey(k)) {
         resolved.lookupBlocked = true;
-        resolved.blockedKey = key;
+        resolved.blockedKey = k;
         return;
       }
       resolved[field] = val ?? command[field];
@@ -317,6 +331,29 @@ export class PersonalDB {
     applyPersonal("value", command.valueIsPersonal);
     applyPersonal("label", command.labelIsPersonal);
     applyPersonal("location", command.locationIsPersonal);
+    applyPersonal("findTerm", command.valueIsPersonal, command.personalKey || command.findTerm);
+
+    if (command.conditionType === "comparison") {
+      const left = this.resolveCompareSide(command.compareLeft);
+      if (left.blocked) {
+        resolved.lookupBlocked = true;
+        resolved.blockedKey = left.key;
+        return resolved;
+      }
+      resolved.compareLeftValue = left.value;
+      if (command.compareRight?.isTarget) {
+        resolved.compareRightIsTarget = true;
+      } else {
+        const right = this.resolveCompareSide(command.compareRight);
+        if (right.blocked) {
+          resolved.lookupBlocked = true;
+          resolved.blockedKey = right.key;
+          return resolved;
+        }
+        resolved.compareRightValue = right.value;
+      }
+    }
+
     return resolved;
   }
 }

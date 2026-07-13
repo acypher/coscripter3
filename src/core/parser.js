@@ -14,7 +14,7 @@ const ORDINAL_RE = /\b(first|second|third|fourth|fifth|sixth|seventh|eighth|nint
 const FILTER_RE = /whose name (?:starts with|contains|ends with)\s+"[^"]*"/i;
 
 // Leading verb phrases, stripped before deriving an unquoted label.
-const VERB_RE = /^\s*(?:control-?click|click(?:\s+on)?|press|choose|mouseover(?:\s+over)?|turn\s+(?:on|off)|expand|collapse|toggle|copy|clip|paste(?:\s+into)?|wait\s+until|verify(?:\s+that)?|assert(?:\s+that)?|if|there\s+is(?:\s+an?)?|enter|type|put|append|select|pick|close|switch\s+to)\b/i;
+const VERB_RE = /^\s*(?:double-?click|shift-?click|control-?click|click(?:\s+on)?|press|choose|mouseover(?:\s+over)?|turn\s+(?:on|off)|expand|collapse|toggle|copy|clip|paste(?:\s+into)?|wait\s+until|verify(?:\s+that)?|assert(?:\s+that)?|if|there\s+is(?:\s+an?)?|enter|type|put|append|select|pick|close|switch\s+to|open|find|search\s+for)\b/i;
 
 const TYPE_WORDS_RE = /\b(?:radio button|radio|check ?box|text ?box|text ?area|input field|list ?box|drop[- ]?down|menu item|menu|button|link|textarea|input|field|box|list|tab|section|item|element|video|player|image|icon)\b/gi;
 
@@ -82,6 +82,130 @@ function detectType(strippedText) {
 function parseYourRef(text) {
   const m = text.match(/\byour\s+"([^"]*)"/i);
   return m ? m[1] : "";
+}
+
+function parseXPath(text) {
+  let m = text.match(/\bx"([^"]*)"/i);
+  if (m) return m[1];
+  m = text.match(/\bx'([^']*)'/i);
+  if (m) return m[1];
+  return "";
+}
+
+function parseCompareSide(text) {
+  const trimmed = norm(text);
+  if (!trimmed) {
+    return { value: "", isPersonal: false, key: "", isTarget: false };
+  }
+  const personalKey = parseYourRef(trimmed);
+  if (personalKey) {
+    return { value: personalKey, isPersonal: true, key: personalKey, isTarget: false };
+  }
+  if (/^the\b/i.test(trimmed)) {
+    const t = parseTarget(trimmed);
+    return {
+      label: t.label,
+      type: t.type,
+      ordinal: t.ordinal,
+      nameFilter: t.nameFilter,
+      labelIsPersonal: t.labelIsPersonal,
+      personalKey: t.personalKey,
+      value: "",
+      isPersonal: false,
+      key: "",
+      isTarget: true,
+    };
+  }
+  const quoted = extractQuoted(trimmed);
+  if (quoted.length) {
+    return { value: quoted[0], isPersonal: false, key: "", isTarget: false };
+  }
+  return { value: trimmed, isPersonal: false, key: "", isTarget: false };
+}
+
+function parseIfCondition(slop) {
+  const rest = slop.replace(/^if\s+/i, "").trim();
+  const lower = rest.toLowerCase();
+
+  if (!/^there\s+is\b/i.test(lower)) {
+    const compPatterns = [
+      { re: /^(.+?)\s+(?:does\s+not\s+contain|doesn't\s+contain)\s+(.+)$/i, op: "contains", negate: true },
+      { re: /^(.+?)\s+contains\s+(.+)$/i, op: "contains", negate: false },
+      { re: /^(.+?)\s+(?:does\s+not\s+equal|doesn't\s+equal)\s+(.+)$/i, op: "equals", negate: true },
+      { re: /^(.+?)\s+(?:equals?|=)\s+(.+)$/i, op: "equals", negate: false },
+      { re: /^(.+?)\s+less\s+than\s+(.+)$/i, op: "less", negate: false },
+      { re: /^(.+?)\s+greater\s+than\s+(.+)$/i, op: "greater", negate: false },
+      { re: /^(.+?)\s+<\s+(.+)$/i, op: "less", negate: false },
+      { re: /^(.+?)\s+>\s+(.+)$/i, op: "greater", negate: false },
+    ];
+    for (const { re, op, negate } of compPatterns) {
+      const m = rest.match(re);
+      if (m) {
+        return {
+          conditionType: "comparison",
+          conditionPositive: !negate,
+          compareOp: op,
+          compareLeft: parseCompareSide(m[1]),
+          compareRight: parseCompareSide(m[2]),
+          condition: { type: "comparison", raw: rest, op, positive: !negate },
+        };
+      }
+    }
+  }
+
+  if (/^there\s+is\b/i.test(lower)) {
+    let body = rest.replace(/^there\s+is\s+/i, "");
+    let positive = true;
+    if (/^(?:no|not(?:\s+an?)?)\s+/i.test(body)) {
+      positive = false;
+      body = body.replace(/^(?:no|not(?:\s+an?)?)\s+/i, "");
+    }
+
+    if (/^(?:a\s+)?selection\b/i.test(body)) {
+      return {
+        conditionType: "selection",
+        conditionPositive: positive,
+        conditionSelection: true,
+        condition: { type: "selection", raw: rest, positive },
+      };
+    }
+
+    body = body.replace(/^(?:a|an)\s+/i, "");
+    const xpath = parseXPath(body);
+    if (xpath) {
+      return {
+        conditionType: "existence",
+        conditionPositive: positive,
+        xpath,
+        label: "",
+        type: TYPES.ELEMENT,
+        condition: { type: "existence", raw: rest, positive },
+      };
+    }
+    const t = parseTarget(body);
+    return {
+      conditionType: "existence",
+      conditionPositive: positive,
+      ...t,
+      condition: { type: "existence", raw: rest, positive, ...t },
+    };
+  }
+
+  const t = parseTarget(rest);
+  return {
+    conditionType: "existence",
+    conditionPositive: true,
+    ...t,
+    condition: { type: "existence", raw: rest, positive: true, ...t },
+  };
+}
+
+function parseClickFields(slop) {
+  const xpath = parseXPath(slop);
+  if (xpath) {
+    return { label: "", type: TYPES.ELEMENT, ordinal: 0, nameFilter: null, labelIsPersonal: false, personalKey: "", xpath };
+  }
+  return { ...parseTarget(slop), xpath: "" };
 }
 
 // Derive a label from unquoted words: strip the verb, ordinals, type words,
@@ -194,6 +318,9 @@ function parseStrict(slop, indent) {
   }
 
   // Tabs (type words checked outside quoted labels)
+  if (/^create\s+a\s+new\s+window\b/i.test(lower)) {
+    return base(slop, indent, { action: ACTIONS.CREATE_WINDOW });
+  }
   if (/^create\s+a\s+new\s+tab\b/i.test(lower)) {
     return base(slop, indent, { action: ACTIONS.CREATE_TAB });
   }
@@ -212,20 +339,27 @@ function parseStrict(slop, indent) {
     return base(slop, indent, { action: ACTIONS.PAUSE, seconds: m ? parseFloat(m[1]) : 1 });
   }
   if (/^wait\s+until\b/i.test(lower)) {
+    if (/^wait\s+until\s+there\s+is\b/i.test(lower)) {
+      const cond = parseIfCondition("if " + slop.replace(/^wait\s+until\s+/i, ""));
+      return base(slop, indent, {
+        action: ACTIONS.WAIT,
+        ...cond,
+        condition: { ...cond.condition, type: "wait" },
+      });
+    }
     const t = parseTarget(slop);
     return base(slop, indent, { action: ACTIONS.WAIT, ...t, condition: { type: "wait", raw: slop } });
   }
   if (/^verify\b|^assert\b/i.test(lower)) {
-    const t = parseTarget(slop);
+    if (/^(?:verify|assert)(?:\s+that)?\s+there\s+is\b/i.test(lower)) {
+      const cond = parseIfCondition(slop.replace(/^(?:verify|assert)(?:\s+that)?\s+/i, "if "));
+      return base(slop, indent, { action: ACTIONS.VERIFY, ...cond });
+    }
+    const t = parseClickFields(slop);
     return base(slop, indent, { action: ACTIONS.VERIFY, ...t });
   }
   if (/^if\b/i.test(lower)) {
-    const t = parseTarget(slop);
-    return base(slop, indent, {
-      action: ACTIONS.IF,
-      ...t,
-      condition: { type: "if", raw: slop.replace(/^if\s+/i, ""), ...t },
-    });
+    return base(slop, indent, { action: ACTIONS.IF, ...parseIfCondition(slop) });
   }
   if (/^else\b/i.test(lower)) return base(slop, indent, { action: ACTIONS.ELSE });
   if (/^end\b/i.test(lower)) {
@@ -233,8 +367,40 @@ function parseStrict(slop, indent) {
     return base(slop, indent, { action: ACTIONS.END, endType: m ? m[1].toLowerCase() : "" });
   }
   if (/^there\s+is\b/i.test(lower)) {
-    const t = parseTarget(slop);
-    return base(slop, indent, { action: ACTIONS.THERE_IS, ...t });
+    const cond = parseIfCondition("if " + slop);
+    return base(slop, indent, { action: ACTIONS.THERE_IS, ...cond });
+  }
+  if (/^find\s+next\b/i.test(lower)) {
+    return base(slop, indent, { action: ACTIONS.FIND, findDirection: "next" });
+  }
+  if (/^find\s+previous\b/i.test(lower)) {
+    return base(slop, indent, { action: ACTIONS.FIND, findDirection: "previous" });
+  }
+  if (/^find\b|^search\s+for\b/i.test(lower)) {
+    const body = slop.replace(/^search\s+for\s+/i, "").replace(/^find\s+/i, "");
+    const personalKey = parseYourRef(body);
+    const quoted = extractQuoted(body);
+    const term = personalKey || quoted[0] || norm(body);
+    return base(slop, indent, {
+      action: ACTIONS.FIND,
+      findTerm: term,
+      valueIsPersonal: !!personalKey,
+      personalKey: personalKey || "",
+      findDirection: "first",
+    });
+  }
+  if (/^open\b/i.test(lower)) {
+    const quoted = extractQuoted(slop);
+    const personalKey = parseYourRef(slop);
+    const location = personalKey || quoted[0] || "";
+    return base(slop, indent, {
+      action: ACTIONS.OPEN,
+      location,
+      locationIsPersonal: !!personalKey,
+      personalKey: personalKey || "",
+      openInWindow: /\bnew\s+window\b/i.test(lower),
+      openInTab: /\bnew\s+tab\b/i.test(lower),
+    });
   }
   if (/^repeat\b/i.test(lower)) {
     const counterKey = parseYourRef(slop);
@@ -267,15 +433,23 @@ function parseStrict(slop, indent) {
 
   // Mouse / click family
   if (/^control-?click\b/i.test(lower)) {
-    const t = parseTarget(slop);
+    const t = parseClickFields(slop);
     return base(slop, indent, { action: ACTIONS.CONTROL_CLICK, ...t, ctrlKey: true });
   }
+  if (/^shift-?click\b/i.test(lower)) {
+    const t = parseClickFields(slop);
+    return base(slop, indent, { action: ACTIONS.CLICK, ...t, shiftKey: true });
+  }
+  if (/^double-?click\b/i.test(lower)) {
+    const t = parseClickFields(slop);
+    return base(slop, indent, { action: ACTIONS.DOUBLE_CLICK, ...t });
+  }
   if (/^mouseover\b/i.test(lower)) {
-    const t = parseTarget(slop);
+    const t = parseClickFields(slop);
     return base(slop, indent, { action: ACTIONS.MOUSEOVER, ...t });
   }
   if (/^click\b|^press\b|^choose\b/i.test(lower)) {
-    const t = parseTarget(slop);
+    const t = parseClickFields(slop);
     return base(slop, indent, { action: ACTIONS.CLICK, ...t });
   }
 

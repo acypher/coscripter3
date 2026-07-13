@@ -32,6 +32,7 @@
       preview: executorMod.preview,
       Command: commandsMod.Command,
       elementExists: labelerMod.elementExists,
+      readElementValue: labelerMod.readElementValue,
     };
   })();
 
@@ -78,6 +79,16 @@
       ready
         .then(({ preview, Command }) => sendResponse(preview(new Command(msg.command))))
         .catch(() => sendResponse({ ok: false }));
+      return true;
+    }
+
+    if (msg.type === "READ_VALUE") {
+      ready
+        .then(({ readElementValue, Command }) => {
+          const value = readElementValue(new Command(msg.command), document);
+          sendResponse({ ok: value != null, value: value ?? "" });
+        })
+        .catch(() => sendResponse({ ok: false, value: "" }));
       return true;
     }
   };

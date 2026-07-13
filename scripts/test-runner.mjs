@@ -4,6 +4,7 @@
 // Run: node scripts/test-runner.mjs
 
 import { ScriptRunner } from "../src/core/runner.js";
+import { compareValues } from "../src/core/executor.js";
 
 let failed = 0;
 function check(desc, actual, expected) {
@@ -18,8 +19,9 @@ function check(desc, actual, expected) {
 }
 
 // Drive a script to completion. `conditions` maps if-labels to booleans.
+// `compareValues` maps left-side strings to right-side strings for comparison ifs.
 // Returns the slop of every executed step, in order.
-function run(text, { conditions = {}, counters = {} } = {}) {
+function run(text, { conditions = {}, counters = {}, selection = false, comparisons = {} } = {}) {
   const runner = ScriptRunner.fromText(text);
   const executed = [];
   const db = { ...counters };
@@ -27,7 +29,29 @@ function run(text, { conditions = {}, counters = {} } = {}) {
     const step = runner.next();
     if (!step) return executed;
     if (step.type === "if") {
-      runner.branch(step.cmd, !!conditions[step.cmd.label]);
+      let result;
+      if (step.cmd.conditionSelection) {
+        result = !!selection;
+        if (step.cmd.conditionPositive === false) result = !result;
+      } else if (step.cmd.conditionType === "comparison") {
+        const leftKey = step.cmd.compareLeft?.value || step.cmd.compareLeft?.key || "";
+        if (comparisons[leftKey] !== undefined) {
+          result = comparisons[leftKey];
+        } else {
+          step.cmd.compareLeftValue = step.cmd.compareLeftValue ?? step.cmd.compareLeft?.value ?? "";
+          step.cmd.compareRightValue = step.cmd.compareRightValue ?? step.cmd.compareRight?.value ?? "";
+          result = compareValues(
+            step.cmd.compareLeftValue,
+            step.cmd.compareRightValue,
+            step.cmd.compareOp
+          );
+        }
+        if (step.cmd.conditionPositive === false) result = !result;
+      } else {
+        result = !!conditions[step.cmd.label];
+        if (step.cmd.conditionPositive === false) result = !result;
+      }
+      runner.branch(step.cmd, result);
       continue;
     }
     if (step.type === "repeat-counter") {
@@ -155,6 +179,38 @@ check(
     conditions: { X: false },
   }),
   ['click the "B" button']
+);
+
+// --- negation ---
+check(
+  "if there is no skips when absent",
+  run('* if there is no "Missing" button\n** click the "A" button\n* click the "B" button', {
+    conditions: { Missing: false },
+  }),
+  ['click the "A" button', 'click the "B" button']
+);
+check(
+  "if there is no runs else when present",
+  run('* if there is no "Here" button\n** click the "A" button\n* else\n** click the "B" button\n* click the "Z" button', {
+    conditions: { Here: true },
+  }),
+  ['click the "B" button', 'click the "Z" button']
+);
+
+// --- comparison if ---
+check(
+  "if comparison equals true",
+  run('* if your "count" equals "0"\n** click the "Zero" button\n* click the "Done" button', {
+    comparisons: { count: true },
+  }),
+  ['click the "Zero" button', 'click the "Done" button']
+);
+check(
+  "if comparison equals false",
+  run('* if your "count" equals "0"\n** click the "Zero" button\n* click the "Done" button', {
+    comparisons: { count: false },
+  }),
+  ['click the "Done" button']
 );
 
 process.exit(failed ? 1 : 0);

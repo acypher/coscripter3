@@ -328,6 +328,38 @@ async function checkCondition(cmd, tabId) {
   }
 }
 
+async function readElementValueFromPage(cmd, tabId) {
+  const ready = await ensureContentReady(tabId);
+  if (!ready) return null;
+  try {
+    const res = await chrome.tabs.sendMessage(tabId, {
+      type: "READ_VALUE",
+      command: plainCommand(cmd),
+    });
+    return res?.value ?? null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function evaluateCondition(resolved, tabId) {
+  if (resolved.conditionType === "comparison" && resolved.compareRightIsTarget) {
+    const side = resolved.compareRight || {};
+    const targetCmd = new Command({
+      label: side.label,
+      type: side.type,
+      ordinal: side.ordinal,
+      nameFilter: side.nameFilter,
+      xpath: side.xpath || "",
+    });
+    const val = await readElementValueFromPage(targetCmd, tabId);
+    resolved.compareRightValue = val ?? "";
+  }
+
+  const result = await checkCondition(resolved, tabId);
+  return { ok: true, conditionResult: result };
+}
+
 function personalLookupError(resolved) {
   if (!resolved.lookupBlocked) return null;
   return `Unlock your data to use private value "${resolved.blockedKey}".`;
@@ -429,6 +461,43 @@ async function runOne(cmd, tabId, db) {
     return { ok: true, tabId: tab.id };
   }
 
+  if (resolved.action === ACTIONS.CREATE_WINDOW) {
+    const win = await chrome.windows.create({ focused: true });
+    const tabs = await chrome.tabs.query({ windowId: win.id, active: true });
+    const tab = tabs[0];
+    if (tab) {
+      runState.tabId = tab.id;
+      await delay(300);
+      return { ok: true, tabId: tab.id };
+    }
+    return { ok: true };
+  }
+
+  if (resolved.action === ACTIONS.OPEN) {
+    let url = (resolved.location || "").trim();
+    if (!url) return { ok: false, error: "No URL given." };
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(url) && !url.startsWith("about:")) {
+      url = "https://" + url;
+    }
+    if (resolved.openInWindow) {
+      const win = await chrome.windows.create({ url, focused: true });
+      const tabs = await chrome.tabs.query({ windowId: win.id, active: true });
+      const tab = tabs[0];
+      if (tab) {
+        runState.tabId = tab.id;
+        await waitForNav(tab.id);
+        await delay(350);
+        return { ok: true, tabId: tab.id };
+      }
+      return { ok: true };
+    }
+    const tab = await chrome.tabs.create({ url, active: true });
+    runState.tabId = tab.id;
+    await waitForNav(tab.id);
+    await delay(350);
+    return { ok: true, tabId: tab.id };
+  }
+
   if (resolved.action === ACTIONS.SWITCH_TAB) {
     const tab = await findTabByTitle(resolved.label);
     if (!tab) return { ok: false, error: `No tab matching "${resolved.label}".` };
@@ -451,12 +520,7 @@ async function runOne(cmd, tabId, db) {
   }
 
   if (resolved.action === ACTIONS.IF || resolved.action === ACTIONS.THERE_IS) {
-    const probe = new Command({
-      ...resolved,
-      action: ACTIONS.THERE_IS,
-    });
-    const exists = await checkCondition(probe, tabId);
-    return { ok: true, conditionResult: exists };
+    return evaluateCondition(resolved, tabId);
   }
 
   return runPageCommand(resolved, tabId);

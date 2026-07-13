@@ -1,6 +1,6 @@
-# CoScripter3
+# Coscripter3
 
-A modern **Chrome (Manifest V3)** remake of [CoScripter](https://en.wikipedia.org/wiki/CoScripter), the IBM Research tool that lets you record actions in your browser, replay them, and read/edit them as plain-English scripts. CoScripter3 brings that "sloppy programming" idea to today's Chrome, written in plain JavaScript with no build step.
+A modern **Chrome (Manifest V3)** remake of [CoScripter](https://en.wikipedia.org/wiki/CoScripter), the IBM Research tool that lets you record actions in your browser, replay them, and read/edit them as plain-English scripts. Coscripter3 brings that "sloppy programming" idea to today's Chrome, written in plain JavaScript with no build step.
 
 It is a modernization of the original [CoScripter Firefox extension](https://github.com/jeffnichols-ibm/coscripter-extension).
 
@@ -56,13 +56,13 @@ During Run, a step that can't find its target yet is retried automatically for a
 1. Open `chrome://extensions` in Chrome.
 2. Turn on **Developer mode** (top-right).
 3. Click **Load unpacked** and choose this folder (`coscripter3`).
-4. Pin the CoScripter3 icon, then click it to open the side panel.
+4. Pin the Coscripter3 icon, then click it to open the side panel.
 
 There is no build step — Chrome loads the source directly.
 
 The manifest includes a public `key`, so every install of this build gets the same extension ID (`ppmgbdbglofohigkfpnnnjncfigglgbe`). That keeps local script storage stable when you reload from this repo. Each user still has their own saved scripts in `chrome.storage.local` on their machine — the shared ID does not merge data between people.
 
-If you already had CoScripter3 loaded unpacked **before** this key was added, remove the old entry on `chrome://extensions` and load this folder again. Export any scripts you care about first; storage from the old ID will not carry over.
+If you already had Coscripter3 loaded unpacked **before** this key was added, remove the old entry on `chrome://extensions` and load this folder again. Export any scripts you care about first; storage from the old ID will not carry over.
 
 ### Sharing scripts
 

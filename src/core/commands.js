@@ -11,7 +11,11 @@ export const ACTIONS = {
   RELOAD: "reload",
   CLICK: "click",
   CONTROL_CLICK: "control_click",
+  DOUBLE_CLICK: "double_click",
   MOUSEOVER: "mouseover",
+  OPEN: "open",
+  FIND: "find",
+  CREATE_WINDOW: "create_window",
   ENTER: "enter",
   PUT: "put",
   APPEND: "append",
@@ -87,6 +91,19 @@ export class Command {
     labelIsPersonal = false,
     locationIsPersonal = false,
     endType = "",
+    xpath = "",
+    conditionType = "existence",
+    conditionPositive = true,
+    conditionSelection = false,
+    compareOp = "",
+    compareLeft = null,
+    compareRight = null,
+    compareLeftValue = "",
+    compareRightValue = "",
+    openInWindow = false,
+    openInTab = false,
+    findTerm = "",
+    findDirection = "first",
   } = {}) {
     this.action = action;
     this.label = label;
@@ -110,6 +127,19 @@ export class Command {
     this.labelIsPersonal = labelIsPersonal;
     this.locationIsPersonal = locationIsPersonal;
     this.endType = endType;
+    this.xpath = xpath;
+    this.conditionType = conditionType;
+    this.conditionPositive = conditionPositive;
+    this.conditionSelection = conditionSelection;
+    this.compareOp = compareOp;
+    this.compareLeft = compareLeft;
+    this.compareRight = compareRight;
+    this.compareLeftValue = compareLeftValue;
+    this.compareRightValue = compareRightValue;
+    this.openInWindow = openInWindow;
+    this.openInTab = openInTab;
+    this.findTerm = findTerm;
+    this.findDirection = findDirection;
   }
 
   isExecutable() {
@@ -138,6 +168,9 @@ export class Command {
       ACTIONS.RELOAD,
       ACTIONS.PAUSE,
       ACTIONS.CREATE_TAB,
+      ACTIONS.CREATE_WINDOW,
+      ACTIONS.OPEN,
+      ACTIONS.FIND,
       ACTIONS.SWITCH_TAB,
       ACTIONS.CLOSE_TAB,
       ACTIONS.YOU,
@@ -199,9 +232,14 @@ export class Command {
       case ACTIONS.RELOAD:
         return "reload";
       case ACTIONS.CLICK:
+        if (this.xpath) return `click x"${this.xpath}"`;
+        if (this.shiftKey) return `shift-click ${this._targetPhrase()}`;
         return `click ${this._targetPhrase()}`;
       case ACTIONS.CONTROL_CLICK:
         return `control-click ${this._targetPhrase()}`;
+      case ACTIONS.DOUBLE_CLICK:
+        if (this.xpath) return `double-click x"${this.xpath}"`;
+        return `double-click ${this._targetPhrase()}`;
       case ACTIONS.MOUSEOVER:
         return `mouseover ${this._targetPhrase()}`;
       case ACTIONS.ENTER:
@@ -264,6 +302,23 @@ export class Command {
         return `switch to the "${this.label}" tab`;
       case ACTIONS.CREATE_TAB:
         return "create a new tab";
+      case ACTIONS.CREATE_WINDOW:
+        return "create a new window";
+      case ACTIONS.OPEN:
+        if (this.openInWindow) {
+          return `open "${this.location}" in a new window`;
+        }
+        if (this.openInTab) {
+          return `open "${this.location}" in a new tab`;
+        }
+        return `open "${this.location}"`;
+      case ACTIONS.FIND:
+        if (this.findDirection === "next") return "find next";
+        if (this.findDirection === "previous") return "find previous";
+        if (this.valueIsPersonal) {
+          return `find your "${this.personalKey || this.findTerm}"`;
+        }
+        return `find "${this.findTerm}"`;
       case ACTIONS.CLOSE_TAB:
         return this.label ? `close the "${this.label}" tab` : "close the tab";
       case ACTIONS.YOU:

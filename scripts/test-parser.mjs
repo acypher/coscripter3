@@ -105,6 +105,26 @@ const sw = p('switch to the "Gmail" tab');
 check("switch tab", sw.action, ACTIONS.SWITCH_TAB);
 check("switch tab label", sw.label, "Gmail");
 
+// --- Phase 5.5: negation, comparison, xpath, shift/dbl-click, open, find ---
+const ifNo = p('if there is no "404" button');
+check("if negation positive flag", ifNo.conditionPositive, false);
+check("if negation label", ifNo.label, "404");
+
+const ifCompare = p('if your "count" equals "0"');
+check("if comparison type", ifCompare.conditionType, "comparison");
+check("if comparison op", ifCompare.compareOp, "equals");
+check("if comparison left personal", ifCompare.compareLeft.isPersonal, true);
+check("if comparison right value", ifCompare.compareRight.value, "0");
+
+check("if selection", p("if there is a selection").conditionSelection, true);
+check("shift-click", p('shift-click the "Open" link').shiftKey, true);
+check("double-click", p('double-click the "Row" link').action, ACTIONS.DOUBLE_CLICK);
+check("xpath click", p('click x"//button[@id=\'go\']"').xpath, "//button[@id='go']");
+check("create window", p("create a new window").action, ACTIONS.CREATE_WINDOW);
+check("open in window", p('open "example.com" in a new window').openInWindow, true);
+check("find term", p('find "hello"').findTerm, "hello");
+check("find next", p("find next").findDirection, "next");
+
 // --- round trip ---
 for (const line of [
   'click the "OK" button',

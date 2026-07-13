@@ -133,9 +133,57 @@ async function readClipboard() {
   return clipboardCache;
 }
 
+function doDoubleClick(el) {
+  el.focus({ preventScroll: true });
+  mouseEvent(el, "mousedown");
+  mouseEvent(el, "mouseup");
+  mouseEvent(el, "click");
+  mouseEvent(el, "mousedown");
+  mouseEvent(el, "mouseup");
+  mouseEvent(el, "click");
+  mouseEvent(el, "dblclick");
+}
+
+export function compareValues(left, right, op) {
+  const l = String(left ?? "").trim();
+  const r = String(right ?? "").trim();
+  const ln = parseFloat(l);
+  const rn = parseFloat(r);
+  const numeric = Number.isFinite(ln) && Number.isFinite(rn) && l !== "" && r !== "";
+  switch (op) {
+    case "equals":
+      return numeric ? ln === rn : l.toLowerCase() === r.toLowerCase();
+    case "contains":
+      return l.toLowerCase().includes(r.toLowerCase());
+    case "less":
+      return numeric ? ln < rn : l < r;
+    case "greater":
+      return numeric ? ln > rn : l > r;
+    default:
+      return false;
+  }
+}
+
+function hasTextSelection(doc = document) {
+  const sel = doc.getSelection?.();
+  return !!((sel?.toString?.() || "").trim());
+}
+
 export function checkCondition(command) {
+  if (command.conditionSelection) {
+    const has = hasTextSelection(document);
+    return command.conditionPositive !== false ? has : !has;
+  }
+
+  if (command.conditionType === "comparison") {
+    let result = compareValues(command.compareLeftValue, command.compareRightValue, command.compareOp);
+    if (command.conditionPositive === false) result = !result;
+    return result;
+  }
+
   const probe = { ...command, action: ACTIONS.THERE_IS };
-  return elementExists(probe, document);
+  const exists = elementExists(probe, document);
+  return command.conditionPositive !== false ? exists : !exists;
 }
 
 export function preview(command) {
@@ -155,14 +203,36 @@ export async function execute(command) {
   }
 
   if (command.action === ACTIONS.VERIFY) {
-    if (!elementExists(command, document)) {
+    const ok = checkCondition({ ...command, conditionType: command.conditionType || "existence" });
+    if (!ok) {
       return { ok: false, error: `Verify failed: ${command.describe()}` };
     }
     return { ok: true };
   }
 
   if (command.action === ACTIONS.THERE_IS) {
-    return { ok: elementExists(command, document) };
+    return { ok: checkCondition(command) };
+  }
+
+  if (command.action === ACTIONS.FIND) {
+    const term = command.findTerm || "";
+    const backwards = command.findDirection === "previous";
+    const continueSearch = command.findDirection === "next" || command.findDirection === "previous";
+    if (!term && !continueSearch) {
+      return { ok: false, error: "No search term given." };
+    }
+    const found = window.find(
+      term,
+      false,
+      backwards,
+      true,
+      false,
+      true,
+      false
+    );
+    return found
+      ? { ok: true }
+      : { ok: false, error: `Could not find "${term}".` };
   }
 
   const el = findElementInFrames(command, document);
@@ -187,6 +257,10 @@ export async function execute(command) {
     case ACTIONS.CLICK:
     case ACTIONS.CONTROL_CLICK:
       doClick(el, { ctrlKey: command.ctrlKey || command.action === ACTIONS.CONTROL_CLICK, shiftKey: command.shiftKey });
+      return { ok: true };
+
+    case ACTIONS.DOUBLE_CLICK:
+      doDoubleClick(el);
       return { ok: true };
 
     case ACTIONS.MOUSEOVER:
@@ -264,10 +338,10 @@ export async function execute(command) {
     case ACTIONS.WAIT: {
       const deadline = Date.now() + 30000;
       while (Date.now() < deadline) {
-        if (elementExists(command, document)) return { ok: true };
+        if (checkCondition(command)) return { ok: true };
         await new Promise((r) => setTimeout(r, 300));
       }
-      return { ok: false, error: `Timed out waiting for ${command.label}.` };
+      return { ok: false, error: `Timed out waiting for ${command.label || command.condition?.raw || "condition"}.` };
     }
 
     default:

@@ -399,13 +399,13 @@ function candidatesForType(type, doc) {
     case TYPES.RADIO:
       return doc.querySelectorAll('input[type="radio"], [role="radio"]');
     case TYPES.TAB:
-      return doc.querySelectorAll('[role="tab"]');
+      return doc.querySelectorAll('[role="tab"], [role="tablist"] > *, .tab, [data-tab], [aria-selected]');
     case TYPES.SECTION:
-      return doc.querySelectorAll("details, [aria-expanded], .accordion, [data-toggle]");
+      return doc.querySelectorAll("details, [aria-expanded], .accordion, [data-toggle], [role='region']");
     case TYPES.MENU:
-      return doc.querySelectorAll('[role="menu"], menu, .menu, nav');
+      return doc.querySelectorAll('[role="menu"], [role="menubar"], menu, nav[aria-label], .menu');
     case TYPES.MENU_ITEM:
-      return doc.querySelectorAll('[role="menuitem"], [role="option"], li');
+      return doc.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"], a[role="menuitem"], li[role="menuitem"]');
     case TYPES.ITEM:
       return doc.querySelectorAll("li, [role='listitem'], [role='option']");
     default:
@@ -439,7 +439,27 @@ function rankCandidates(command, doc) {
   return scored;
 }
 
+function findByXPath(xpath, doc) {
+  if (!xpath) return null;
+  try {
+    const result = doc.evaluate(
+      xpath,
+      doc,
+      null,
+      XPathResult.FIRST_ORDERED_NODE_TYPE,
+      null
+    );
+    const node = result.singleNodeValue;
+    return node instanceof Element ? node : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 export function findElement(command, doc = document) {
+  if (command.xpath) {
+    return findByXPath(command.xpath, doc);
+  }
   const scored = rankCandidates(command, doc);
   if (!scored.length) return null;
   if (command.ordinal && command.ordinal > 0) {
@@ -459,6 +479,22 @@ export function elementExists(command, doc = document) {
 }
 
 export function findElementInFrames(command, rootDoc = document) {
+  if (command.xpath) {
+    const direct = findByXPath(command.xpath, rootDoc);
+    if (direct) return direct;
+    const iframes = rootDoc.querySelectorAll("iframe, frame");
+    for (const frame of iframes) {
+      try {
+        const fdoc = frame.contentDocument;
+        if (!fdoc) continue;
+        const found = findByXPath(command.xpath, fdoc);
+        if (found) return found;
+      } catch (e) {
+        /* cross-origin */
+      }
+    }
+    return null;
+  }
   const el = findElement(command, rootDoc);
   if (el) return el;
   const iframes = rootDoc.querySelectorAll("iframe, frame");
@@ -473,6 +509,14 @@ export function findElementInFrames(command, rootDoc = document) {
     }
   }
   return null;
+}
+
+export function readElementValue(command, doc = document) {
+  const el = findElementInFrames(command, doc);
+  if (!el) return null;
+  if (el.isContentEditable) return (el.textContent || "").trim();
+  if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") return (el.value || "").trim();
+  return (el.textContent || "").trim();
 }
 
 export function previewElement(command, doc = document) {
