@@ -1121,6 +1121,44 @@ async function handle(msg, sender, sendResponse) {
       return;
     }
 
+    case "START_EXTRACT_MODE": {
+      let tabId = msg.tabId;
+      if (!tabId) {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        tabId = tab?.id;
+      }
+      if (!tabId) {
+        sendResponse({ ok: false, error: "No active tab." });
+        return;
+      }
+      const ready = await ensureContentReady(tabId);
+      if (!ready) {
+        sendResponse({ ok: false, error: "Page not accessible." });
+        return;
+      }
+      const res = await chrome.tabs.sendMessage(tabId, { type: "START_EXTRACT_MODE" });
+      sendResponse(res || { ok: false });
+      return;
+    }
+
+    case "EXTRACT_RESULT": {
+      notifyPanel({
+        type: "EXTRACT_RESULT",
+        scraped: msg.scraped,
+        columns: msg.columns,
+        tableXPath: msg.tableXPath,
+        sourceUrl: msg.sourceUrl,
+      });
+      sendResponse({ ok: true });
+      return;
+    }
+
+    case "EXTRACT_CANCELLED": {
+      notifyPanel({ type: "EXTRACT_CANCELLED" });
+      sendResponse({ ok: true });
+      return;
+    }
+
     default:
       sendResponse({ ok: false, error: "Unknown message: " + msg.type });
   }

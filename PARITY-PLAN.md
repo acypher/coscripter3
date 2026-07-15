@@ -135,7 +135,7 @@ background.js                — wire repeat-over-rows, extract commands
 | **6c. Cell references in parser** ✅ **Done in v0.9.3** | Extend `parseTarget()` for `cell in the "col" column of row N of the "name" scratchtable` (`parseCellRef` in `parser.js`) |
 | **6d. Execute on cells** ✅ **Done in v0.10.1** | `put`, `enter`, `click`, `increment` targeting scratchtable cells |
 | **6e. Repeat over rows** ✅ **Done in v0.11.0** | Bare `* repeat` (no count) = loop all data rows; `repeat with your "counter"` already exists |
-| **6f. Data extraction mode** | Record mode variant: user clicks column headers on a web table → generates `extract` step with saved XPaths |
+| **6f. Data extraction mode** ✅ **Done in v0.12.0** | Tables tab **Extract from page…**: click first-row cells (or Alt-click a table) → fill scratchtable + save column XPaths + insert `extract` step |
 | **6g. Extract command** | `extract the "homes" scratchtable` / `extract and append to …` — scrape page table into scratchtable |
 
 **Acceptance scenario (from Vegemite paper):** List of house addresses in scratchtable → script loops rows → pastes each address into WalkScore → writes score back to scratchtable column.

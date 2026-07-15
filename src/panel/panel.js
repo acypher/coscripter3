@@ -62,7 +62,15 @@ function setStatus(text, kind = "") {
   statusEl.className = "cs-status" + (kind ? " " + kind : "");
 }
 
-const scratchEditor = initScratchEditor({ setStatus });
+function appendStep(slop) {
+  const prefix = editor.value.length && !editor.value.endsWith("\n") ? "\n" : "";
+  editor.value += `${prefix}* ${slop}\n`;
+  renderHighlights();
+  editor.scrollTop = editor.scrollHeight;
+  syncScroll();
+}
+
+const scratchEditor = initScratchEditor({ setStatus, appendStep });
 
 async function getActiveTabId() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -137,14 +145,6 @@ function scrollLineIntoView(lineNumber) {
     editor.scrollTop = Math.max(0, top - editor.clientHeight / 2);
     syncScroll();
   }
-}
-
-function appendStep(slop) {
-  const prefix = editor.value.length && !editor.value.endsWith("\n") ? "\n" : "";
-  editor.value += `${prefix}* ${slop}\n`;
-  renderHighlights();
-  editor.scrollTop = editor.scrollHeight;
-  syncScroll();
 }
 
 function setRecording(on) {
@@ -505,6 +505,17 @@ chrome.runtime.onMessage.addListener((msg) => {
       break;
     case "SCRATCH_UPDATED":
       scratchEditor.reloadIf(msg.tableId);
+      break;
+    case "EXTRACT_RESULT":
+      scratchEditor.applyExtraction({
+        scraped: msg.scraped,
+        columns: msg.columns,
+        tableXPath: msg.tableXPath,
+        sourceUrl: msg.sourceUrl,
+      });
+      break;
+    case "EXTRACT_CANCELLED":
+      setStatus("Extraction cancelled.");
       break;
     case "PDB_AUTH":
       pdbAuthState.unlocked = !!msg.unlocked;

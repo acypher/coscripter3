@@ -198,4 +198,35 @@ setScratchTableStorage({
   });
 }
 
+// --- loadFromScraped + extraction recipe ---
+{
+  const t = ScratchTable.create("Homes");
+  t.loadFromScraped({
+    headers: ["Address", "Score"],
+    rows: [["1 Main", "90"], ["2 Oak", "70"]],
+    urls: [["https://a.example/1", ""], ["https://a.example/2", ""]],
+  });
+  check("scraped cols", t.columns, ["Address", "Score"]);
+  check("scraped rows", t.getRowCount(), 2);
+  check("scraped text", t.getCellText(0, 0), "1 Main");
+  check("scraped url", t.getCellUrl(0, 0), "https://a.example/1");
+
+  t.extraction = {
+    sourceUrl: "https://example.com",
+    tableXPath: "/html/body/table[1]",
+    columns: [{ xpath: "//td[1]", label: "Address" }],
+  };
+  const json = t.toJSON();
+  const round = ScratchTable.fromJSON(json);
+  check("extraction roundtrip", round.extraction, t.extraction);
+
+  t.loadFromScraped({
+    headers: ["Address", "Score"],
+    rows: [["3 Pine", "55"]],
+    urls: [["", ""]],
+  }, { append: true });
+  check("append row count", t.getRowCount(), 3);
+  check("append cell", t.getCellText(2, 0), "3 Pine");
+}
+
 process.exit(failed ? 1 : 0);

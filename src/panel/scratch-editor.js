@@ -9,9 +9,9 @@ import {
 } from "../core/scratchtable.js";
 
 /**
- * @param {{ setStatus: (text: string, kind?: string) => void }} opts
+ * @param {{ setStatus: (text: string, kind?: string) => void, appendStep?: (slop: string) => void }} opts
  */
-export function initScratchEditor({ setStatus }) {
+export function initScratchEditor({ setStatus, appendStep }) {
   const tableName = document.getElementById("tableName");
   const tableList = document.getElementById("tableList");
   const tableCount = document.getElementById("tableCount");
@@ -21,6 +21,7 @@ export function initScratchEditor({ setStatus }) {
   const deleteTableBtn = document.getElementById("deleteTableBtn");
   const addRowBtn = document.getElementById("addRowBtn");
   const addColBtn = document.getElementById("addColBtn");
+  const extractFromPageBtn = document.getElementById("extractFromPageBtn");
 
   let current = ScratchTable.create("Untitled");
   let dirty = false;
@@ -293,6 +294,21 @@ export function initScratchEditor({ setStatus }) {
     renderGrid();
   });
 
+  extractFromPageBtn?.addEventListener("click", async () => {
+    setStatus("Extract mode: click cells on the page…", "run");
+    extractFromPageBtn.disabled = true;
+    try {
+      const res = await chrome.runtime.sendMessage({ type: "START_EXTRACT_MODE" });
+      if (!res?.ok) {
+        setStatus(res?.error || "Could not start extract mode on this page.", "error");
+      }
+    } catch (e) {
+      setStatus(String(e.message || e), "error");
+    } finally {
+      extractFromPageBtn.disabled = false;
+    }
+  });
+
   return {
     async refresh() {
       await refreshLibrary();
@@ -310,6 +326,37 @@ export function initScratchEditor({ setStatus }) {
     },
     getCurrent() {
       return current;
+    },
+    /** Apply a page extraction result into the current table and save. */
+    async applyExtraction(result) {
+      if (!result?.scraped) {
+        setStatus("Extraction cancelled or empty.", "error");
+        return;
+      }
+      syncFromUi();
+      current.loadFromScraped(result.scraped, { append: false });
+      current.extraction = {
+        sourceUrl: result.sourceUrl || "",
+        tableXPath: result.tableXPath || result.scraped.tableXPath || "",
+        columns: Array.isArray(result.columns) ? result.columns : result.scraped.columns || [],
+      };
+      markDirty();
+      renderGrid();
+      try {
+        const saved = await saveTable(current);
+        current = saved;
+        dirty = false;
+        tableName.value = saved.name;
+        await refreshLibrary();
+        const n = saved.getRowCount();
+        const c = saved.getColumnCount();
+        setStatus(`Extracted ${n}×${c} into "${saved.name}".`, "ok");
+        const step = `extract the "${saved.name}" scratchtable`;
+        if (typeof appendStep === "function") appendStep(step);
+        else chrome.runtime.sendMessage({ type: "APPEND_STEP", step }).catch(() => {});
+      } catch (e) {
+        setStatus(String(e.message || e), "error");
+      }
     },
   };
 }

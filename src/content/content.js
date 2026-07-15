@@ -11,12 +11,15 @@
   const base = chrome.runtime.getURL("src/core/");
 
   const ready = (async () => {
-    const [recorderMod, executorMod, commandsMod, labelerMod] = await Promise.all([
-      import(base + "recorder.js"),
-      import(base + "executor.js"),
-      import(base + "commands.js"),
-      import(base + "labeler.js"),
-    ]);
+    const [recorderMod, executorMod, commandsMod, labelerMod, extractModeMod, extractionMod] =
+      await Promise.all([
+        import(base + "recorder.js"),
+        import(base + "executor.js"),
+        import(base + "commands.js"),
+        import(base + "labeler.js"),
+        import(base + "extract-mode.js"),
+        import(base + "extraction.js"),
+      ]);
     const recorder = new recorderMod.Recorder(
       (slop) => {
         chrome.runtime.sendMessage({ type: "RECORDED_STEP", step: slop });
@@ -35,6 +38,10 @@
       readElementValue: labelerMod.readElementValue,
       setClipboard: executorMod.setClipboard,
       getClipboard: executorMod.getClipboard,
+      startExtractMode: extractModeMod.startExtractMode,
+      stopExtractMode: extractModeMod.stopExtractMode,
+      extractFromRecipe: extractionMod.extractFromRecipe,
+      scrapeBestTable: extractionMod.scrapeBestTable,
     };
   })();
 
@@ -59,6 +66,54 @@
     }
 
     if (!isTop) return;
+
+    if (msg.type === "START_EXTRACT_MODE") {
+      ready
+        .then(({ startExtractMode, stopExtractMode }) => {
+          stopExtractMode();
+          startExtractMode({
+            onDone: (result) => {
+              chrome.runtime.sendMessage({ type: "EXTRACT_RESULT", ...result });
+            },
+            onCancel: () => {
+              chrome.runtime.sendMessage({ type: "EXTRACT_CANCELLED" });
+            },
+          });
+          sendResponse({ ok: true });
+        })
+        .catch((e) => sendResponse({ ok: false, error: String(e) }));
+      return true;
+    }
+
+    if (msg.type === "STOP_EXTRACT_MODE") {
+      ready
+        .then(({ stopExtractMode }) => {
+          stopExtractMode();
+          sendResponse({ ok: true });
+        })
+        .catch(() => sendResponse({ ok: false }));
+      return true;
+    }
+
+    if (msg.type === "EXTRACT_PAGE") {
+      ready
+        .then(({ extractFromRecipe, scrapeBestTable }) => {
+          const scraped = msg.recipe
+            ? extractFromRecipe(msg.recipe, document)
+            : scrapeBestTable(document);
+          if (!scraped || !scraped.rows?.length) {
+            sendResponse({ ok: false, error: "No table data found on this page." });
+            return;
+          }
+          sendResponse({
+            ok: true,
+            scraped,
+            sourceUrl: location.href,
+          });
+        })
+        .catch((e) => sendResponse({ ok: false, error: String(e) }));
+      return true;
+    }
 
     if (msg.type === "EXECUTE") {
       ready

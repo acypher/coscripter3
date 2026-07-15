@@ -44,6 +44,7 @@ function normalizeCell(cell) {
  *   name: string,
  *   columns: string[],
  *   rows: { text: string, url: string }[][],
+ *   extraction: null | { sourceUrl, tableXPath?, columns?: [{xpath, label}] },
  *   updated: number
  * }
  */
@@ -53,6 +54,7 @@ export class ScratchTable {
     name = "Untitled",
     columns = null,
     rows = null,
+    extraction = null,
     updated = 0,
   } = {}) {
     this.id = id || uid();
@@ -61,6 +63,7 @@ export class ScratchTable {
       ? columns.map((c) => String(c))
       : ["A", "B"];
     this.rows = [];
+    this.extraction = extraction || null;
     this.updated = updated || 0;
 
     if (Array.isArray(rows) && rows.length) {
@@ -94,6 +97,7 @@ export class ScratchTable {
       name: this.name,
       columns: this.columns.slice(),
       rows: this.rows.map((row) => row.map((c) => ({ text: c.text, url: c.url }))),
+      extraction: this.extraction ? JSON.parse(JSON.stringify(this.extraction)) : null,
       updated: this.updated,
     };
   }
@@ -281,6 +285,47 @@ export class ScratchTable {
       }
       this.rows.push(row);
     }
+  }
+
+  /**
+   * Load scraped page data ({ headers, rows, urls }) into this table.
+   * When append is true, adds rows under the existing columns (padded/truncated).
+   */
+  loadFromScraped(scraped, { append = false } = {}) {
+    if (!scraped || !Array.isArray(scraped.headers)) return false;
+    const headers = scraped.headers.map((h) => String(h ?? ""));
+    const dataRows = Array.isArray(scraped.rows) ? scraped.rows : [];
+    const urlRows = Array.isArray(scraped.urls) ? scraped.urls : [];
+
+    if (!append || this.getRowCount() === 0 || this._isBlank()) {
+      const matrix = [headers.length ? headers : ["A"], ...dataRows];
+      const meta = [
+        (headers.length ? headers : ["A"]).map(() => ""),
+        ...urlRows,
+      ];
+      this.loadFromMatrix(matrix, meta);
+      return true;
+    }
+
+    for (let i = 0; i < dataRows.length; i++) {
+      const src = dataRows[i] || [];
+      const meta = urlRows[i] || [];
+      const r = this.addRow();
+      for (let c = 0; c < this.columns.length; c++) {
+        this.setCell(
+          r,
+          c,
+          src[c] != null ? String(src[c]) : "",
+          meta[c] != null ? String(meta[c]) : ""
+        );
+      }
+    }
+    return true;
+  }
+
+  /** True when every cell is empty (initial blank table). */
+  _isBlank() {
+    return this.rows.every((row) => row.every((c) => !c.text && !c.url));
   }
 
   /** Export as [headers, ...stringRows] matching original ScratchSpaceTable.data. */
