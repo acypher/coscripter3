@@ -105,7 +105,7 @@ src/core/storage.js            Local script storage
 
 Unit tests live in `scripts/` — run `node scripts/test-parser.mjs`, `node scripts/test-runner.mjs`, `node scripts/test-nav-logic.mjs`, `node scripts/test-media-label.mjs`.
 
-**Planned (Phase 6 — scratch space):** Spreadsheet tables (Vegemite), data extraction mode, repeat-over-rows.
+**Planned (Phase 6 — scratch space):** Spreadsheet tables (Vegemite) — data model + Tables editor UI done; still todo: cell refs in scripts, data extraction mode, repeat-over-rows.
 
 **Planned (Phase 7 — sharing):** Wiki server / script sharing, accounts, search.
 

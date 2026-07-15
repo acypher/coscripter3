@@ -84,6 +84,94 @@ function parseYourRef(text) {
   return m ? m[1] : "";
 }
 
+function ordinalToNumber(word) {
+  if (!word) return 0;
+  const w = word.toLowerCase();
+  if (ORDINALS[w]) return ORDINALS[w];
+  const n = parseInt(w, 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Parse "Address" column / first column / column 3 / number 4 column.
+ * Returns { label, number, isPersonal } or null.
+ */
+function parseAxisSpec(part, axis) {
+  const t = norm(part);
+  if (!t) return null;
+  const axisWord = axis === "column" ? "column" : "row";
+
+  let m = t.match(new RegExp(`^(?:the\\s+)?your\\s+"([^"]*)"\\s+${axisWord}$`, "i"));
+  if (m) return { label: m[1], number: 0, isPersonal: true };
+
+  m = t.match(new RegExp(`^(?:the\\s+)?"([^"]*)"\\s+${axisWord}$`, "i"));
+  if (m) return { label: m[1], number: 0, isPersonal: false };
+
+  m = t.match(new RegExp(
+    `^(?:the\\s+)?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|\\d+(?:st|nd|rd|th))\\s+${axisWord}$`,
+    "i"
+  ));
+  if (m) return { label: "", number: ordinalToNumber(m[1]), isPersonal: false };
+
+  m = t.match(new RegExp(`^(?:the\\s+)?number\\s+(\\d+)\\s+${axisWord}$`, "i"));
+  if (m) return { label: "", number: parseInt(m[1], 10), isPersonal: false };
+
+  m = t.match(new RegExp(`^(?:the\\s+)?${axisWord}\\s+(\\d+)$`, "i"));
+  if (m) return { label: "", number: parseInt(m[1], 10), isPersonal: false };
+
+  return null;
+}
+
+/**
+ * Parse a scratchtable cell reference, e.g.
+ *   the cell in the "Address" column of row 2 of the "Homes" scratchtable
+ *   the cell in column 3 of row 1 of the scratchtable
+ *   the cell in the first column of the second row of the scratchtable
+ *
+ * Returns a cellRef object or null.
+ */
+export function parseCellRef(text) {
+  if (!text || !/\bcell\b/i.test(text) || !/\bscratch\s*(?:table|space)\b/i.test(text)) {
+    return null;
+  }
+
+  // Split: cell in/at <col> of <row> of [name] scratchtable
+  const m = text.match(
+    /(?:the\s+)?cell\s+(?:at|in)\s+(.+?)\s+of\s+(.+?)\s+of\s+(?:the\s+)?(?:(your\s+"[^"]*"|\"[^\"]*\")\s+)?(?:scratch\s*table|scratch\s*space)\b/i
+  );
+  if (!m) return null;
+
+  const col = parseAxisSpec(m[1], "column");
+  const row = parseAxisSpec(m[2], "row");
+  if (!col || !row) return null;
+  if (!col.label && !col.number) return null;
+  if (!row.label && !row.number) return null;
+
+  let tableName = "";
+  let tableIsPersonal = false;
+  if (m[3]) {
+    const personal = m[3].match(/^your\s+"([^"]*)"$/i);
+    if (personal) {
+      tableName = personal[1];
+      tableIsPersonal = true;
+    } else {
+      const quoted = m[3].match(/^"([^"]*)"$/);
+      tableName = quoted ? quoted[1] : norm(m[3]);
+    }
+  }
+
+  return {
+    columnLabel: col.label,
+    columnNumber: col.number,
+    columnIsPersonal: col.isPersonal,
+    rowLabel: row.label,
+    rowNumber: row.number,
+    rowIsPersonal: row.isPersonal,
+    tableName,
+    tableIsPersonal,
+  };
+}
+
 function parseXPath(text) {
   let m = text.match(/\bx"([^"]*)"/i);
   if (m) return m[1];
@@ -96,6 +184,17 @@ function parseCompareSide(text) {
   const trimmed = norm(text);
   if (!trimmed) {
     return { value: "", isPersonal: false, key: "", isTarget: false };
+  }
+  const cellRef = parseCellRef(trimmed);
+  if (cellRef) {
+    return {
+      value: "",
+      isPersonal: false,
+      key: "",
+      isTarget: false,
+      isCellRef: true,
+      cellRef,
+    };
   }
   const personalKey = parseYourRef(trimmed);
   if (personalKey) {
@@ -110,6 +209,7 @@ function parseCompareSide(text) {
       nameFilter: t.nameFilter,
       labelIsPersonal: t.labelIsPersonal,
       personalKey: t.personalKey,
+      cellRef: t.cellRef || null,
       value: "",
       isPersonal: false,
       key: "",
@@ -203,7 +303,7 @@ function parseIfCondition(slop) {
 function parseClickFields(slop) {
   const xpath = parseXPath(slop);
   if (xpath) {
-    return { label: "", type: TYPES.ELEMENT, ordinal: 0, nameFilter: null, labelIsPersonal: false, personalKey: "", xpath };
+    return { label: "", type: TYPES.ELEMENT, ordinal: 0, nameFilter: null, labelIsPersonal: false, personalKey: "", xpath, cellRef: null };
   }
   return { ...parseTarget(slop), xpath: "" };
 }
@@ -221,6 +321,18 @@ function unquotedLabel(text) {
 
 // Parse the target portion of a step ("the third "Search" button whose ...").
 function parseTarget(text) {
+  const cellRef = parseCellRef(text);
+  if (cellRef) {
+    return {
+      label: "",
+      type: TYPES.CELL,
+      ordinal: 0,
+      nameFilter: null,
+      labelIsPersonal: false,
+      personalKey: "",
+      cellRef,
+    };
+  }
   const nameFilter = parseNameFilter(text);
   const noFilter = text.replace(FILTER_RE, " ");
   const stripped = stripQuoted(noFilter);
@@ -237,7 +349,7 @@ function parseTarget(text) {
   } else {
     label = unquotedLabel(noFilter);
   }
-  return { label, type, ordinal, nameFilter, labelIsPersonal, personalKey };
+  return { label, type, ordinal, nameFilter, labelIsPersonal, personalKey, cellRef: null };
 }
 
 // Replace quoted contents with same-length filler so regex indexes still map
@@ -247,12 +359,22 @@ function maskQuoted(text) {
 }
 
 // Split "enter X into Y" style steps into value text and target text.
+// Skips the "in" inside "cell in …" so scratchtable cell values parse correctly.
 function splitValueTarget(text, separatorRe) {
-  const m = maskQuoted(text).match(separatorRe);
-  if (!m || m.index === undefined) return { valueText: text, targetText: "" };
+  const masked = maskQuoted(text);
+  const flags = separatorRe.flags.includes("g") ? separatorRe.flags : `${separatorRe.flags}g`;
+  const re = new RegExp(separatorRe.source, flags);
+  let best = null;
+  let m;
+  while ((m = re.exec(masked)) !== null) {
+    const before = masked.slice(0, m.index);
+    if (/^in$/i.test(m[0].trim()) && /\bcell\s+$/i.test(before)) continue;
+    best = m;
+  }
+  if (!best || best.index === undefined) return { valueText: text, targetText: "" };
   return {
-    valueText: text.slice(0, m.index),
-    targetText: text.slice(m.index + m[0].length),
+    valueText: text.slice(0, best.index),
+    targetText: text.slice(best.index + best[0].length),
   };
 }
 
@@ -260,28 +382,56 @@ function parseValue(valueText, verbForPersonal) {
   const personalKey = parseYourRef(valueText);
   const valueIsPersonal =
     !!personalKey && new RegExp(`^\\s*${verbForPersonal}\\s+your\\b`, "i").test(valueText);
+  if (valueIsPersonal) {
+    return {
+      value: personalKey,
+      valueIsPersonal: true,
+      personalKey,
+      valueCellRef: null,
+    };
+  }
+
+  const afterVerb = valueText.replace(new RegExp(`^\\s*(?:${verbForPersonal})\\s+`, "i"), "");
+  const valueCellRef = parseCellRef(afterVerb);
+  if (valueCellRef) {
+    return {
+      value: "",
+      valueIsPersonal: false,
+      personalKey: "",
+      valueCellRef,
+    };
+  }
+
   const quoted = extractQuoted(valueText);
   return {
-    value: valueIsPersonal ? personalKey : (quoted[0] ?? ""),
-    valueIsPersonal,
-    personalKey: valueIsPersonal ? personalKey : "",
+    value: quoted[0] ?? "",
+    valueIsPersonal: false,
+    personalKey: "",
+    valueCellRef: null,
   };
 }
 
 function inputCommand(slop, indent, action, verbs, separatorRe, defaultType) {
   const { valueText, targetText } = splitValueTarget(slop, separatorRe);
   const v = parseValue(valueText, verbs);
-  const t = targetText ? parseTarget(targetText) : { label: "", type: "", ordinal: 0, nameFilter: null, labelIsPersonal: false, personalKey: "" };
+  const t = targetText
+    ? parseTarget(targetText)
+    : { label: "", type: "", ordinal: 0, nameFilter: null, labelIsPersonal: false, personalKey: "", cellRef: null };
+  const type = t.cellRef
+    ? TYPES.CELL
+    : (t.type && t.type !== TYPES.ELEMENT ? t.type : defaultType);
   return base(slop, indent, {
     action,
     value: v.value,
     valueIsPersonal: v.valueIsPersonal,
     personalKey: v.personalKey || t.personalKey || "",
+    valueCellRef: v.valueCellRef || null,
     label: t.label,
-    type: t.type && t.type !== TYPES.ELEMENT ? t.type : defaultType,
+    type,
     ordinal: t.ordinal,
     nameFilter: t.nameFilter,
     labelIsPersonal: t.labelIsPersonal,
+    cellRef: t.cellRef || null,
   });
 }
 
@@ -411,23 +561,43 @@ function parseStrict(slop, indent) {
     return base(slop, indent, { action: ACTIONS.REPEAT, repeatCount: m ? parseInt(m[1], 10) : 1 });
   }
   if (/^increment\b/i.test(lower)) {
-    const key = parseYourRef(slop) || extractQuoted(slop)[0] || "";
     const m = slop.match(/by\s+(\d+)/i);
+    const incrementBy = m ? parseInt(m[1], 10) : 1;
+    const cellRef = parseCellRef(slop);
+    if (cellRef) {
+      return base(slop, indent, {
+        action: ACTIONS.INCREMENT,
+        cellRef,
+        type: TYPES.CELL,
+        incrementBy,
+      });
+    }
+    const key = parseYourRef(slop) || extractQuoted(slop)[0] || "";
     return base(slop, indent, {
       action: ACTIONS.INCREMENT,
       personalKey: key,
       label: key,
-      incrementBy: m ? parseInt(m[1], 10) : 1,
+      incrementBy,
     });
   }
   if (/^decrement\b/i.test(lower)) {
-    const key = parseYourRef(slop) || extractQuoted(slop)[0] || "";
     const m = slop.match(/by\s+(\d+)/i);
+    const incrementBy = m ? parseInt(m[1], 10) : 1;
+    const cellRef = parseCellRef(slop);
+    if (cellRef) {
+      return base(slop, indent, {
+        action: ACTIONS.DECREMENT,
+        cellRef,
+        type: TYPES.CELL,
+        incrementBy,
+      });
+    }
+    const key = parseYourRef(slop) || extractQuoted(slop)[0] || "";
     return base(slop, indent, {
       action: ACTIONS.DECREMENT,
       personalKey: key,
       label: key,
-      incrementBy: m ? parseInt(m[1], 10) : 1,
+      incrementBy,
     });
   }
 

@@ -17,6 +17,7 @@
 
     <nav class="cs-tabs">
       <button id="tabScript" class="cs-tab active" type="button">Script</button>
+      <button id="tabTables" class="cs-tab" type="button">Tables</button>
       <button id="tabData" class="cs-tab" type="button">Your data</button>
     </nav>
 
@@ -51,6 +52,29 @@
           spellcheck="false"
           placeholder="Press Record and act in the page, or type steps like:&#10;&#10;* go to &quot;example.com&quot;&#10;* enter your &quot;name&quot; into the &quot;Search&quot; textbox&#10;* click the &quot;Search&quot; button&#10;* pause 2 seconds&#10;* if there is a &quot;Sign in&quot; button&#10;** click the &quot;Sign in&quot; button"
         ></textarea>
+      </section>
+    </div>
+
+    <div id="panelTables" class="cs-panel-view hidden">
+      <section class="cs-scripts">
+        <div class="cs-row">
+          <input id="tableName" type="text" class="cs-name" placeholder="Untitled table" />
+          <button id="newTableBtn" class="cs-btn cs-btn-ghost" title="New table" type="button">New</button>
+          <button id="saveTableBtn" class="cs-btn" title="Save table" type="button">Save</button>
+          <button id="deleteTableBtn" class="cs-btn cs-btn-ghost" title="Delete table" type="button">Delete</button>
+        </div>
+        <details id="tableLibraryDetails" class="cs-library">
+          <summary>Saved tables (<span id="tableCount">0</span>)</summary>
+          <ul id="tableList" class="cs-list"></ul>
+        </details>
+      </section>
+      <section class="cs-scratch-toolbar">
+        <button id="addRowBtn" class="cs-btn cs-btn-ghost" type="button">+ Row</button>
+        <button id="addColBtn" class="cs-btn cs-btn-ghost" type="button">+ Column</button>
+        <span class="cs-scratch-hint">Edit cells below. Links: paste a URL into a cell’s link field.</span>
+      </section>
+      <section class="cs-scratch-wrap">
+        <div id="scratchGrid" class="cs-scratch-grid" tabindex="0"></div>
       </section>
     </div>
 

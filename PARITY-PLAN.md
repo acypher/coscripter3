@@ -130,9 +130,9 @@ background.js                — wire repeat-over-rows, extract commands
 
 | Task | Notes |
 |---|---|
-| **6a. Data model** | Named tables in `chrome.storage.local`; columns + rows; cell = string or link URL |
-| **6b. Scratch editor UI** | New **Tables** tab: list tables, open editor (HTML `<table>` or simple grid) |
-| **6c. Cell references in parser** | Extend `parseTarget()` for `cell in the "col" column of row N of the "name" scratchtable` |
+| **6a. Data model** ✅ **Done in v0.9.1** | Named tables in `chrome.storage.local`; columns + rows; cell = string or link URL (`src/core/scratchtable.js`, `scripts/test-scratchtable.mjs`) |
+| **6b. Scratch editor UI** ✅ **Done in v0.9.2** | New **Tables** tab: list tables, open editor (`src/panel/scratch-editor.js`) |
+| **6c. Cell references in parser** ✅ **Done in v0.9.3** | Extend `parseTarget()` for `cell in the "col" column of row N of the "name" scratchtable` (`parseCellRef` in `parser.js`) |
 | **6d. Execute on cells** | `put`, `enter`, `click`, `increment` targeting scratchtable cells |
 | **6e. Repeat over rows** | Bare `* repeat` (no count) = loop all data rows; `repeat with your "counter"` already exists |
 | **6f. Data extraction mode** | Record mode variant: user clicks column headers on a web table → generates `extract` step with saved XPaths |

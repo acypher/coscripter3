@@ -1,6 +1,7 @@
 // Side panel UI logic.
 
 import { listScripts, getScript, saveScript, deleteScript } from "../core/storage.js";
+import { initScratchEditor } from "./scratch-editor.js";
 
 const editor = document.getElementById("editor");
 const highlights = document.getElementById("highlights");
@@ -32,8 +33,10 @@ const pdbLockBtn = document.getElementById("pdbLockBtn");
 let pdbAuthState = { unlocked: false, hasPrivate: false, needsSetup: false };
 
 const tabScript = document.getElementById("tabScript");
+const tabTables = document.getElementById("tabTables");
 const tabData = document.getElementById("tabData");
 const panelScript = document.getElementById("panelScript");
+const panelTables = document.getElementById("panelTables");
 const panelData = document.getElementById("panelData");
 
 const userPrompt = document.getElementById("userPrompt");
@@ -163,11 +166,12 @@ function setRunning(on) {
 }
 
 function showTab(name) {
-  const isScript = name === "script";
-  tabScript.classList.toggle("active", isScript);
-  tabData.classList.toggle("active", !isScript);
-  panelScript.classList.toggle("hidden", !isScript);
-  panelData.classList.toggle("hidden", isScript);
+  tabScript.classList.toggle("active", name === "script");
+  tabTables.classList.toggle("active", name === "tables");
+  tabData.classList.toggle("active", name === "data");
+  panelScript.classList.toggle("hidden", name !== "script");
+  panelTables.classList.toggle("hidden", name !== "tables");
+  panelData.classList.toggle("hidden", name !== "data");
 }
 
 function formatDate(ts) {
@@ -522,7 +526,10 @@ editor.addEventListener("keyup", (e) => {
 });
 
 tabScript.addEventListener("click", () => showTab("script"));
+tabTables.addEventListener("click", () => showTab("tables"));
 tabData.addEventListener("click", () => showTab("data"));
+
+const scratchEditor = initScratchEditor({ setStatus });
 
 continueBtn.addEventListener("click", () => {
   userPrompt.classList.add("hidden");
@@ -566,6 +573,7 @@ pdbPassword.addEventListener("keydown", (e) => {
 async function init() {
   await refreshLibrary();
   await loadPdb();
+  await scratchEditor.refresh();
   const st = await send({ type: "GET_STATE" });
   if (st) {
     setRecording(!!st.recording);

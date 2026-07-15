@@ -125,6 +125,54 @@ check("open in window", p('open "example.com" in a new window').openInWindow, tr
 check("find term", p('find "hello"').findTerm, "hello");
 check("find next", p("find next").findDirection, "next");
 
+// --- Phase 6c: scratchtable cell references ---
+const cellNamed = p('click the cell in the "Address" column of row 2 of the "Homes" scratchtable');
+check("cell click action", cellNamed.action, ACTIONS.CLICK);
+check("cell click type", cellNamed.type, TYPES.CELL);
+check("cell col label", cellNamed.cellRef.columnLabel, "Address");
+check("cell row number", cellNamed.cellRef.rowNumber, 2);
+check("cell table name", cellNamed.cellRef.tableName, "Homes");
+
+const cellDefault = p('put "Allen" into the cell in the "first name" column of row 3 of the scratchtable');
+check("cell put action", cellDefault.action, ACTIONS.PUT);
+check("cell put value", cellDefault.value, "Allen");
+check("cell put col", cellDefault.cellRef.columnLabel, "first name");
+check("cell put row", cellDefault.cellRef.rowNumber, 3);
+check("cell put no table", cellDefault.cellRef.tableName, "");
+
+const cellNums = p('copy the cell in column 3 of row 1 of the scratchtable');
+check("cell nums col", cellNums.cellRef.columnNumber, 3);
+check("cell nums row", cellNums.cellRef.rowNumber, 1);
+
+const cellOrd = p('click the cell in the first column of the second row of the scratchtable');
+check("cell ordinal col", cellOrd.cellRef.columnNumber, 1);
+check("cell ordinal row", cellOrd.cellRef.rowNumber, 2);
+
+const cellRowLabel = p('enter "x" into the cell in the "Score" column of the "Palo Alto" row of the "Homes" scratchtable');
+check("cell row label", cellRowLabel.cellRef.rowLabel, "Palo Alto");
+check("cell row label table", cellRowLabel.cellRef.tableName, "Homes");
+
+const cellAsValue = p('enter the cell in the "Address" column of row 1 of the "Homes" scratchtable into the "Search" textbox');
+check("cell as value", !!cellAsValue.valueCellRef, true);
+check("cell as value col", cellAsValue.valueCellRef.columnLabel, "Address");
+check("cell as value target", cellAsValue.label, "Search");
+
+const cellInc = p('increment the cell in the "quantity" column of row 3 of the scratchtable by 2');
+check("cell increment", cellInc.action, ACTIONS.INCREMENT);
+check("cell increment by", cellInc.incrementBy, 2);
+check("cell increment col", cellInc.cellRef.columnLabel, "quantity");
+
+check(
+  "cell round-trip named",
+  cellNamed.toSlop(),
+  'click the cell in the "Address" column of row 2 of the "Homes" scratchtable'
+);
+check(
+  "cell round-trip put",
+  cellDefault.toSlop(),
+  'put "Allen" into the cell in the "first name" column of row 3 of the scratchtable'
+);
+
 // --- round trip ---
 for (const line of [
   'click the "OK" button',

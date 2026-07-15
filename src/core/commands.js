@@ -59,6 +59,7 @@ export const TYPES = {
   MENU_ITEM: "menu item",
   ITEM: "item",
   ELEMENT: "element",
+  CELL: "cell",
 };
 
 export const NAME_FILTERS = {
@@ -104,6 +105,8 @@ export class Command {
     openInTab = false,
     findTerm = "",
     findDirection = "first",
+    cellRef = null,
+    valueCellRef = null,
   } = {}) {
     this.action = action;
     this.label = label;
@@ -140,6 +143,8 @@ export class Command {
     this.openInTab = openInTab;
     this.findTerm = findTerm;
     this.findDirection = findDirection;
+    this.cellRef = cellRef;
+    this.valueCellRef = valueCellRef;
   }
 
   isExecutable() {
@@ -207,7 +212,33 @@ export class Command {
     }
   }
 
+  /** Serialize a scratchtable cell reference to ClearScript. */
+  static formatCellRef(ref) {
+    if (!ref) return "";
+    const colInner = ref.columnLabel
+      ? (ref.columnIsPersonal ? `your "${ref.columnLabel}"` : `"${ref.columnLabel}"`) + " column"
+      : `column ${ref.columnNumber || 1}`;
+    const colPhrase = ref.columnLabel ? `the ${colInner}` : colInner;
+    const rowInner = ref.rowLabel
+      ? (ref.rowIsPersonal ? `your "${ref.rowLabel}"` : `"${ref.rowLabel}"`) + " row"
+      : `row ${ref.rowNumber || 1}`;
+    const rowPhrase = ref.rowLabel ? `the ${rowInner}` : rowInner;
+    let table;
+    if (ref.tableName) {
+      const name = ref.tableIsPersonal ? `your "${ref.tableName}"` : `"${ref.tableName}"`;
+      table = `the ${name} scratchtable`;
+    } else {
+      table = "the scratchtable";
+    }
+    return `the cell in ${colPhrase} of ${rowPhrase} of ${table}`;
+  }
+
+  _cellRefPhrase() {
+    return Command.formatCellRef(this.cellRef);
+  }
+
   _targetPhrase() {
+    if (this.cellRef) return this._cellRefPhrase();
     const ord = this._ordinalWord();
     const prefix = ord ? `the ${ord} ` : "the ";
     const labelPart = this.labelIsPersonal
@@ -216,6 +247,12 @@ export class Command {
     const filter = this._nameFilterPhrase();
     const typePart = this.type ? ` ${this.type}` : "";
     return `${prefix}${labelPart}${filter}${typePart}`;
+  }
+
+  _valuePhrase() {
+    if (this.valueCellRef) return Command.formatCellRef(this.valueCellRef);
+    if (this.valueIsPersonal) return `your "${this.personalKey || this.value}"`;
+    return `"${this.value}"`;
   }
 
   toSlop() {
@@ -243,22 +280,13 @@ export class Command {
       case ACTIONS.MOUSEOVER:
         return `mouseover ${this._targetPhrase()}`;
       case ACTIONS.ENTER:
-        if (this.valueIsPersonal) {
-          return `enter your "${this.personalKey || this.value}" into ${this._targetPhrase()}`;
-        }
-        return `enter "${this.value}" into ${this._targetPhrase()}`;
+        return `enter ${this._valuePhrase()} into ${this._targetPhrase()}`;
       case ACTIONS.PUT:
-        if (this.valueIsPersonal) {
-          return `put your "${this.personalKey || this.value}" into ${this._targetPhrase()}`;
-        }
-        return `put "${this.value}" into ${this._targetPhrase()}`;
+        return `put ${this._valuePhrase()} into ${this._targetPhrase()}`;
       case ACTIONS.APPEND:
-        return `append "${this.value}" to ${this._targetPhrase()}`;
+        return `append ${this._valuePhrase()} to ${this._targetPhrase()}`;
       case ACTIONS.SELECT:
-        if (this.valueIsPersonal) {
-          return `select your "${this.personalKey || this.value}" from ${this._targetPhrase()}`;
-        }
-        return `select "${this.value}" from ${this._targetPhrase()}`;
+        return `select ${this._valuePhrase()} from ${this._targetPhrase()}`;
       case ACTIONS.TURN_ON:
         return `turn on ${this._targetPhrase()}`;
       case ACTIONS.TURN_OFF:
@@ -295,8 +323,14 @@ export class Command {
         }
         return `repeat ${this.repeatCount} times`;
       case ACTIONS.INCREMENT:
+        if (this.cellRef) {
+          return `increment ${this._cellRefPhrase()} by ${this.incrementBy}`;
+        }
         return `increment your "${this.personalKey || this.label}" by ${this.incrementBy}`;
       case ACTIONS.DECREMENT:
+        if (this.cellRef) {
+          return `decrement ${this._cellRefPhrase()} by ${this.incrementBy}`;
+        }
         return `decrement your "${this.personalKey || this.label}" by ${this.incrementBy}`;
       case ACTIONS.SWITCH_TAB:
         return `switch to the "${this.label}" tab`;

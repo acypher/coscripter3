@@ -351,6 +351,141 @@ body {
   min-height: 0;
 }
 
+.cs-scratch-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.cs-scratch-toolbar .cs-btn {
+  width: auto;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.cs-scratch-hint {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+.cs-scratch-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 10px 12px;
+}
+.cs-scratch-grid {
+  min-width: min-content;
+}
+.cs-scratch-table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.cs-scratch-table th,
+.cs-scratch-table td {
+  border: 1px solid var(--border);
+  padding: 0;
+  vertical-align: top;
+}
+.cs-scratch-corner,
+.cs-scratch-rownum {
+  width: 28px;
+  min-width: 28px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--bg) 70%, var(--panel));
+  font-weight: 600;
+  padding: 4px 2px;
+}
+.cs-scratch-header,
+.cs-scratch-cell,
+.cs-scratch-url {
+  display: block;
+  width: 120px;
+  min-width: 90px;
+  max-width: 180px;
+  padding: 5px 7px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 12px;
+  box-sizing: border-box;
+}
+.cs-scratch-header {
+  font-weight: 600;
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+}
+.cs-scratch-header:focus,
+.cs-scratch-cell:focus,
+.cs-scratch-url:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: var(--panel);
+  position: relative;
+  z-index: 1;
+}
+.cs-scratch-url {
+  display: none;
+  font-size: 10px;
+  color: var(--accent);
+  border-top: 1px dashed var(--border);
+  padding-top: 3px;
+  padding-bottom: 4px;
+}
+.cs-scratch-has-url .cs-scratch-url,
+.cs-scratch-table td:focus-within .cs-scratch-url {
+  display: block;
+}
+.cs-scratch-actions-h,
+.cs-scratch-row-actions {
+  width: 28px;
+  min-width: 28px;
+  text-align: center;
+  background: color-mix(in srgb, var(--bg) 70%, var(--panel));
+}
+.cs-scratch-del-row,
+.cs-scratch-del-col {
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+.cs-scratch-del-row:hover,
+.cs-scratch-del-col:hover {
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+}
+.cs-scratch-col-actions {
+  display: flex;
+  gap: 0;
+  margin-top: 4px;
+  align-items: center;
+}
+.cs-scratch-col-spacer {
+  width: 28px;
+  flex-shrink: 0;
+}
+.cs-scratch-del-col {
+  width: 120px;
+  min-width: 90px;
+  max-width: 180px;
+  font-size: 10px;
+  text-align: center;
+}
+
 .cs-data-section {
   flex: 1;
   display: flex;
