@@ -7,6 +7,8 @@
 //   { type: "if", cmd }            - evaluate the condition, then call branch(cmd, result)
 //   { type: "repeat-counter", cmd }- check the counter, then call
 //                                    enterCounterRepeat(cmd) or skipBlock(cmd)
+//   { type: "repeat-rows", cmd }   - load table row count, then call
+//                                    enterRowRepeat(cmd, rowCount) or skipBlock(cmd)
 //   null                           - script finished
 
 import { parseScript } from "./parser.js";
@@ -94,6 +96,7 @@ export class ScriptRunner {
 
       if (cmd.action === ACTIONS.REPEAT) {
         if (cmd.counterKey) return { type: "repeat-counter", cmd };
+        if (cmd.repeatOverRows) return { type: "repeat-rows", cmd };
         if ((cmd.repeatCount || 0) < 1) {
           this.skipBlock(cmd);
           continue;
@@ -104,6 +107,8 @@ export class ScriptRunner {
           end: this.findBlockEnd(this.pc, cmd.indent),
           remaining: cmd.repeatCount,
           counterKey: "",
+          rowRepeat: false,
+          rowCount: 0,
         });
         this.pc++;
         continue;
@@ -144,8 +149,39 @@ export class ScriptRunner {
       end: this.findBlockEnd(this.pc, cmd.indent),
       remaining: null,
       counterKey: cmd.counterKey,
+      rowRepeat: false,
+      rowCount: 0,
     });
     this.pc++;
+  }
+
+  // Called for bare "repeat" / "repeat over the … scratchtable".
+  enterRowRepeat(cmd, rowCount) {
+    const n = Math.max(0, rowCount | 0);
+    this.repeatStack.push({
+      repeatIndex: this.pc,
+      start: this.pc + 1,
+      end: this.findBlockEnd(this.pc, cmd.indent),
+      remaining: n,
+      counterKey: "",
+      rowRepeat: true,
+      rowCount: n,
+    });
+    this.pc++;
+  }
+
+  /**
+   * 0-based current scratchtable row while inside a row-repeat, or null.
+   * During the first iteration remaining==rowCount → index 0.
+   */
+  getScratchRowIndex() {
+    for (let i = this.repeatStack.length - 1; i >= 0; i--) {
+      const frame = this.repeatStack[i];
+      if (!frame.rowRepeat) continue;
+      if (!frame.rowCount) return null;
+      return frame.rowCount - frame.remaining;
+    }
+    return null;
   }
 
   // Skip a structural command's whole block (repeat with exhausted counter).

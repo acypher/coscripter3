@@ -375,19 +375,33 @@ function personalLookupError(resolved) {
 }
 
 async function readCellValue(cellRef) {
-  const table = await loadTableForRef(cellRef, runState.scratchTableId);
+  const ref = applyRowRepeatOverride(cellRef);
+  const table = await loadTableForRef(ref, runState.scratchTableId);
   if (!table) {
-    return { ok: false, error: cellRef.tableName
-      ? `No scratchtable named "${cellRef.tableName}".`
+    return { ok: false, error: ref.tableName
+      ? `No scratchtable named "${ref.tableName}".`
       : "No scratchtable found. Create one in the Tables tab." };
   }
-  const pos = table.resolveCellRef(cellRef);
+  const pos = table.resolveCellRef(ref);
   if (!pos) {
-    return { ok: false, error: `Could not find cell ${Command.formatCellRef(cellRef)}.` };
+    return { ok: false, error: `Could not find cell ${Command.formatCellRef(ref)}.` };
   }
   runState.scratchTableId = table.id;
   const cell = table.getCell(pos.row, pos.col);
   return { ok: true, table, pos, text: cell.text, url: cell.url };
+}
+
+/** During "repeat" over rows, remap cell refs to the current iteration row. */
+function applyRowRepeatOverride(cellRef) {
+  if (!cellRef || !runState.runner) return cellRef;
+  const rowIndex = runState.runner.getScratchRowIndex?.();
+  if (rowIndex == null) return cellRef;
+  return {
+    ...cellRef,
+    rowNumber: rowIndex + 1,
+    rowLabel: "",
+    rowIsPersonal: false,
+  };
 }
 
 function looksLikeUrl(s) {
@@ -396,7 +410,7 @@ function looksLikeUrl(s) {
 }
 
 async function executeScratchCellCommand(resolved, tabId) {
-  const ref = resolved.cellRef;
+  const ref = applyRowRepeatOverride(resolved.cellRef);
   const table = await loadTableForRef(ref, runState.scratchTableId);
   if (!table) {
     return {
@@ -772,6 +786,33 @@ async function runScript(text, tabId) {
       db.decrement(cmd.counterKey, 1);
       await db.save();
       notifyPanel({ type: "PDB_UPDATED", text: db.text });
+      continue;
+    }
+
+    if (step.type === "repeat-rows") {
+      const table = await loadTableForRef(
+        { tableName: cmd.repeatTableName || "" },
+        runState.scratchTableId
+      );
+      if (!table) {
+        notifyPanel({
+          type: "RUN_PROGRESS",
+          lineNumber: cmd.lineNumber,
+          status: "error",
+          text: cmd.repeatTableName
+            ? `No scratchtable named "${cmd.repeatTableName}".`
+            : "No scratchtable found for repeat.",
+        });
+        runner.skipBlock(cmd);
+        continue;
+      }
+      runState.scratchTableId = table.id;
+      const n = table.getRowCount();
+      if (n < 1) {
+        runner.skipBlock(cmd);
+        continue;
+      }
+      runner.enterRowRepeat(cmd, n);
       continue;
     }
 

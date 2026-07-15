@@ -85,6 +85,8 @@ export class Command {
     seconds = 0,
     repeatCount = 0,
     counterKey = "",
+    repeatOverRows = false,
+    repeatTableName = "",
     incrementBy = 1,
     condition = null,
     personalKey = "",
@@ -123,6 +125,8 @@ export class Command {
     this.seconds = seconds;
     this.repeatCount = repeatCount;
     this.counterKey = counterKey;
+    this.repeatOverRows = repeatOverRows;
+    this.repeatTableName = repeatTableName;
     this.incrementBy = incrementBy;
     this.condition = condition;
     this.personalKey = personalKey;
@@ -320,6 +324,12 @@ export class Command {
       case ACTIONS.REPEAT:
         if (this.counterKey) {
           return `repeat with your "${this.counterKey}"`;
+        }
+        if (this.repeatOverRows) {
+          if (this.repeatTableName) {
+            return `repeat over the "${this.repeatTableName}" scratchtable`;
+          }
+          return "repeat";
         }
         return `repeat ${this.repeatCount} times`;
       case ACTIONS.INCREMENT:

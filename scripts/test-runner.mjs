@@ -21,10 +21,11 @@ function check(desc, actual, expected) {
 // Drive a script to completion. `conditions` maps if-labels to booleans.
 // `compareValues` maps left-side strings to right-side strings for comparison ifs.
 // Returns the slop of every executed step, in order.
-function run(text, { conditions = {}, counters = {}, selection = false, comparisons = {} } = {}) {
+function run(text, { conditions = {}, counters = {}, selection = false, comparisons = {}, rowCount = 0 } = {}) {
   const runner = ScriptRunner.fromText(text);
   const executed = [];
   const db = { ...counters };
+  const options = { rowCount };
   for (let guard = 0; guard < 500; guard++) {
     const step = runner.next();
     if (!step) return executed;
@@ -63,6 +64,12 @@ function run(text, { conditions = {}, counters = {}, selection = false, comparis
         runner.enterCounterRepeat(step.cmd);
         db[key] = String(val - 1);
       }
+      continue;
+    }
+    if (step.type === "repeat-rows") {
+      const n = options.rowCount ?? 0;
+      if (n < 1) runner.skipBlock(step.cmd);
+      else runner.enterRowRepeat(step.cmd, n);
       continue;
     }
     executed.push(step.cmd.toSlop());
@@ -210,6 +217,18 @@ check(
   run('* if your "count" equals "0"\n** click the "Zero" button\n* click the "Done" button', {
     comparisons: { count: false },
   }),
+  ['click the "Done" button']
+);
+
+// --- repeat over scratchtable rows ---
+check(
+  "repeat over 3 rows",
+  run('* repeat\n** click the "Go" button\n* click the "Done" button', { rowCount: 3 }),
+  ['click the "Go" button', 'click the "Go" button', 'click the "Go" button', 'click the "Done" button']
+);
+check(
+  "repeat over 0 rows skips",
+  run('* repeat\n** click the "Go" button\n* click the "Done" button', { rowCount: 0 }),
   ['click the "Done" button']
 );
 

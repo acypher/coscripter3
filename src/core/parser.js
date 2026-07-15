@@ -558,7 +558,19 @@ function parseStrict(slop, indent) {
       return base(slop, indent, { action: ACTIONS.REPEAT, counterKey });
     }
     const m = slop.match(/repeat\s+(\d+)\s+times/i);
-    return base(slop, indent, { action: ACTIONS.REPEAT, repeatCount: m ? parseInt(m[1], 10) : 1 });
+    if (m) {
+      return base(slop, indent, { action: ACTIONS.REPEAT, repeatCount: parseInt(m[1], 10) });
+    }
+    // Bare "repeat" or "repeat over the "Name" scratchtable" → all rows.
+    const over = slop.match(
+      /repeat(?:\s+over\s+(?:the\s+)?(?:("([^"]*)")\s+)?)?(?:scratchtable|scratch\s*space)?\s*$/i
+    );
+    const tableName = over?.[2] || "";
+    return base(slop, indent, {
+      action: ACTIONS.REPEAT,
+      repeatOverRows: true,
+      repeatTableName: tableName,
+    });
   }
   if (/^increment\b/i.test(lower)) {
     const m = slop.match(/by\s+(\d+)/i);

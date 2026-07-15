@@ -92,6 +92,8 @@ check("if action", iff.action, ACTIONS.IF);
 check("if label", iff.label, "Submit");
 check("repeat times", p("repeat 3 times").repeatCount, 3);
 check("repeat counter", p('repeat with your "counter"').counterKey, "counter");
+check("bare repeat over rows", p("repeat").repeatOverRows, true);
+check("repeat over named table", p('repeat over the "Homes" scratchtable').repeatTableName, "Homes");
 check("else", p("else").action, ACTIONS.ELSE);
 check("end", p("end if").endType, "if");
 check("you step", p("you solve the captcha").action, ACTIONS.YOU);
