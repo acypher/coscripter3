@@ -43,6 +43,9 @@ export const ACTIONS = {
   CLOSE_TAB: "close_tab",
   YOU: "you",
   COMMENT: "comment",
+  EXTRACT: "extract",
+  BEGIN_EXTRACTION: "begin_extraction",
+  END_EXTRACTION: "end_extraction",
   UNKNOWN: "unknown",
 };
 
@@ -109,6 +112,8 @@ export class Command {
     findDirection = "first",
     cellRef = null,
     valueCellRef = null,
+    extractOverwrite = true,
+    extractTableName = "",
   } = {}) {
     this.action = action;
     this.label = label;
@@ -149,6 +154,8 @@ export class Command {
     this.findDirection = findDirection;
     this.cellRef = cellRef;
     this.valueCellRef = valueCellRef;
+    this.extractOverwrite = extractOverwrite;
+    this.extractTableName = extractTableName;
   }
 
   isExecutable() {
@@ -192,6 +199,8 @@ export class Command {
       ACTIONS.END,
       ACTIONS.THERE_IS,
       ACTIONS.REPEAT,
+      ACTIONS.BEGIN_EXTRACTION,
+      ACTIONS.END_EXTRACTION,
     ].includes(this.action);
   }
 
@@ -363,6 +372,21 @@ export class Command {
           return `find your "${this.personalKey || this.findTerm}"`;
         }
         return `find "${this.findTerm}"`;
+      case ACTIONS.EXTRACT: {
+        const name = this.extractTableName || this.label || "";
+        if (this.extractOverwrite === false) {
+          return name
+            ? `extract and append to the "${name}" scratchtable`
+            : "extract and append to the scratchtable";
+        }
+        return name
+          ? `extract the "${name}" scratchtable`
+          : "extract the scratchtable";
+      }
+      case ACTIONS.BEGIN_EXTRACTION:
+        return "begin extraction";
+      case ACTIONS.END_EXTRACTION:
+        return "end extraction";
       case ACTIONS.CLOSE_TAB:
         return this.label ? `close the "${this.label}" tab` : "close the tab";
       case ACTIONS.YOU:

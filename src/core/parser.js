@@ -512,6 +512,23 @@ function parseStrict(slop, indent) {
     return base(slop, indent, { action: ACTIONS.IF, ...parseIfCondition(slop) });
   }
   if (/^else\b/i.test(lower)) return base(slop, indent, { action: ACTIONS.ELSE });
+  if (/^begin\s+extraction\b/i.test(lower)) {
+    return base(slop, indent, { action: ACTIONS.BEGIN_EXTRACTION });
+  }
+  if (/^end\s+extraction\b/i.test(lower)) {
+    return base(slop, indent, { action: ACTIONS.END_EXTRACTION });
+  }
+  if (/^extract\b/i.test(lower)) {
+    const append = /\band\s+append\b/i.test(lower);
+    const quoted = extractQuoted(slop);
+    const tableName = quoted[0] || "";
+    return base(slop, indent, {
+      action: ACTIONS.EXTRACT,
+      extractOverwrite: !append,
+      extractTableName: tableName,
+      label: tableName,
+    });
+  }
   if (/^end\b/i.test(lower)) {
     const m = slop.match(/^end\s+(\w+)/i);
     return base(slop, indent, { action: ACTIONS.END, endType: m ? m[1].toLowerCase() : "" });

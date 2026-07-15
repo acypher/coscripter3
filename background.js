@@ -15,6 +15,9 @@ import {
   loadTableForRef,
   saveTable,
   ScratchTable,
+  getTableByName,
+  getTable,
+  listTables,
 } from "./src/core/scratchtable.js";
 
 const SESSION_KEY = "coscripter_session";
@@ -696,11 +699,77 @@ async function runOne(cmd, tabId, db) {
     return evaluateCondition(resolved, tabId);
   }
 
+  if (resolved.action === ACTIONS.BEGIN_EXTRACTION || resolved.action === ACTIONS.END_EXTRACTION) {
+    return { ok: true };
+  }
+
+  if (resolved.action === ACTIONS.EXTRACT) {
+    return executeExtractCommand(resolved, tabId);
+  }
+
   if (resolved.cellRef) {
     return executeScratchCellCommand(resolved, tabId);
   }
 
   return runPageCommand(resolved, tabId);
+}
+
+/**
+ * Re-scrape the page into a named (or current) scratchtable using a saved
+ * extraction recipe when available (Phase 6g).
+ */
+async function executeExtractCommand(resolved, tabId) {
+  const name = (resolved.extractTableName || resolved.label || "").trim();
+  let table = null;
+  if (name) {
+    table = await getTableByName(name);
+    if (!table) table = ScratchTable.create(name, { rowCount: 0 });
+  } else if (runState.scratchTableId) {
+    table = await getTable(runState.scratchTableId);
+  }
+  if (!table) {
+    const list = await listTables();
+    table = list[0] || null;
+  }
+  if (!table) {
+    return {
+      ok: false,
+      error: name
+        ? `No scratchtable named "${name}". Create one in the Tables tab or extract interactively first.`
+        : "No scratchtable found. Create one in the Tables tab.",
+    };
+  }
+
+  const ready = await ensureContentReady(tabId);
+  if (!ready) return { ok: false, error: "Page is not accessible." };
+
+  let res;
+  try {
+    res = await chrome.tabs.sendMessage(tabId, {
+      type: "EXTRACT_PAGE",
+      recipe: table.extraction || null,
+    });
+  } catch (e) {
+    return { ok: false, error: "No response from page." };
+  }
+  if (!res?.ok || !res.scraped) {
+    return { ok: false, error: res?.error || "No table data found on this page." };
+  }
+
+  const overwrite = resolved.extractOverwrite !== false;
+  table.loadFromScraped(res.scraped, { append: !overwrite });
+  const prev = table.extraction || {};
+  table.extraction = {
+    sourceUrl: res.sourceUrl || prev.sourceUrl || "",
+    tableXPath: prev.tableXPath || res.scraped.tableXPath || "",
+    columns: (Array.isArray(prev.columns) && prev.columns.length)
+      ? prev.columns
+      : (res.scraped.columns || []),
+  };
+  const saved = await saveTable(table);
+  runState.scratchTableId = saved.id;
+  notifyPanel({ type: "SCRATCH_UPDATED", tableId: saved.id });
+  return { ok: true };
 }
 
 async function waitForErrorDecision() {

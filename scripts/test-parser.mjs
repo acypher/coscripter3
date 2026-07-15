@@ -175,6 +175,25 @@ check(
   'put "Allen" into the cell in the "first name" column of row 3 of the scratchtable'
 );
 
+const extractCmd = p('extract the "Homes" scratchtable');
+check("extract action", extractCmd.action, ACTIONS.EXTRACT);
+check("extract overwrite", extractCmd.extractOverwrite, true);
+check("extract table", extractCmd.extractTableName, "Homes");
+check("extract slop", extractCmd.toSlop(), 'extract the "Homes" scratchtable');
+
+const extractAppend = p('extract and append to the "Queue" scratchtable');
+check("extract append action", extractAppend.action, ACTIONS.EXTRACT);
+check("extract append flag", extractAppend.extractOverwrite, false);
+check("extract append table", extractAppend.extractTableName, "Queue");
+check(
+  "extract append slop",
+  extractAppend.toSlop(),
+  'extract and append to the "Queue" scratchtable'
+);
+
+check("begin extraction", p("begin extraction").action, ACTIONS.BEGIN_EXTRACTION);
+check("end extraction", p("end extraction").action, ACTIONS.END_EXTRACTION);
+
 // --- round trip ---
 for (const line of [
   'click the "OK" button',
@@ -183,6 +202,7 @@ for (const line of [
   "go back",
   "close the tab",
   'click the second "More" link',
+  'extract the "Homes" scratchtable',
 ]) {
   check(`round-trip: ${line}`, p(line).toSlop(), line);
 }

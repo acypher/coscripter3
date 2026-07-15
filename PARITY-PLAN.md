@@ -136,7 +136,7 @@ background.js                — wire repeat-over-rows, extract commands
 | **6d. Execute on cells** ✅ **Done in v0.10.1** | `put`, `enter`, `click`, `increment` targeting scratchtable cells |
 | **6e. Repeat over rows** ✅ **Done in v0.11.0** | Bare `* repeat` (no count) = loop all data rows; `repeat with your "counter"` already exists |
 | **6f. Data extraction mode** ✅ **Done in v0.12.0** | Tables tab **Extract from page…**: click first-row cells (or Alt-click a table) → fill scratchtable + save column XPaths + insert `extract` step |
-| **6g. Extract command** | `extract the "homes" scratchtable` / `extract and append to …` — scrape page table into scratchtable |
+| **6g. Extract command** ✅ **Done in v0.13.0** | `extract the "homes" scratchtable` / `extract and append to …` — replay saved XPaths / scrape page table into scratchtable; `begin`/`end extraction` are no-op markers |
 
 **Acceptance scenario (from Vegemite paper):** List of house addresses in scratchtable → script loops rows → pastes each address into WalkScore → writes score back to scratchtable column.
 
