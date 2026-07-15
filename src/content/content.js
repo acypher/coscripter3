@@ -33,6 +33,8 @@
       Command: commandsMod.Command,
       elementExists: labelerMod.elementExists,
       readElementValue: labelerMod.readElementValue,
+      setClipboard: executorMod.setClipboard,
+      getClipboard: executorMod.getClipboard,
     };
   })();
 
@@ -89,6 +91,26 @@
           sendResponse({ ok: value != null, value: value ?? "" });
         })
         .catch(() => sendResponse({ ok: false, value: "" }));
+      return true;
+    }
+
+    if (msg.type === "SET_CLIPBOARD") {
+      ready
+        .then(async ({ setClipboard }) => {
+          await setClipboard(msg.text || "");
+          sendResponse({ ok: true });
+        })
+        .catch(() => sendResponse({ ok: false }));
+      return true;
+    }
+
+    if (msg.type === "GET_CLIPBOARD") {
+      ready
+        .then(async ({ getClipboard }) => {
+          const text = await getClipboard();
+          sendResponse({ ok: true, text: text || "" });
+        })
+        .catch(() => sendResponse({ ok: false, text: "" }));
       return true;
     }
   };

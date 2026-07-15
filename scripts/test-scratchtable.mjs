@@ -165,4 +165,37 @@ setScratchTableStorage({
   check("updated value", (await getTable(saved.id)).getCellText(0, 0), "v2");
 }
 
+// --- resolveCellRef / ensureCellRef (Phase 6d) ---
+{
+  const t = ScratchTable.create("Homes", { columns: ["Address", "Score"], rowCount: 2 });
+  t.setCellText(0, 0, "San Jose");
+  t.setCell(0, 1, "72", "https://example.com/sj");
+  t.setCellText(1, 0, "Palo Alto");
+  t.setCellText(1, 1, "89");
+
+  check("resolve by label+row", t.resolveCellRef({
+    columnLabel: "Address", columnNumber: 0, rowNumber: 1, rowLabel: "", tableName: "",
+  }), { row: 0, col: 0 });
+
+  check("resolve by numbers", t.resolveCellRef({
+    columnLabel: "", columnNumber: 2, rowNumber: 2, rowLabel: "", tableName: "",
+  }), { row: 1, col: 1 });
+
+  check("resolve by row label", t.resolveCellRef({
+    columnLabel: "Score", columnNumber: 0, rowNumber: 0, rowLabel: "Palo Alto", tableName: "",
+  }), { row: 1, col: 1 });
+
+  check("resolve missing", t.resolveCellRef({
+    columnLabel: "Nope", columnNumber: 0, rowNumber: 1, rowLabel: "", tableName: "",
+  }), null);
+
+  const grown = ScratchTable.create("G", { columns: ["A"], rowCount: 1 });
+  const pos = grown.ensureCellRef({
+    columnLabel: "Walk Score", columnNumber: 0, rowNumber: 3, rowLabel: "", tableName: "",
+  });
+  check("ensure grows", { row: pos.row, col: pos.col, cols: grown.getColumnCount(), rows: grown.getRowCount() }, {
+    row: 2, col: 1, cols: 2, rows: 3,
+  });
+}
+
 process.exit(failed ? 1 : 0);

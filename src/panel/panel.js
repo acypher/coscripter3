@@ -62,6 +62,8 @@ function setStatus(text, kind = "") {
   statusEl.className = "cs-status" + (kind ? " " + kind : "");
 }
 
+const scratchEditor = initScratchEditor({ setStatus });
+
 async function getActiveTabId() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab ? tab.id : null;
@@ -501,6 +503,9 @@ chrome.runtime.onMessage.addListener((msg) => {
     case "PDB_UPDATED":
       if (msg.text !== undefined) pdbEditor.value = msg.text;
       break;
+    case "SCRATCH_UPDATED":
+      scratchEditor.reloadIf(msg.tableId);
+      break;
     case "PDB_AUTH":
       pdbAuthState.unlocked = !!msg.unlocked;
       pdbAuthState.hasPrivate = !!msg.hasPrivate;
@@ -528,8 +533,6 @@ editor.addEventListener("keyup", (e) => {
 tabScript.addEventListener("click", () => showTab("script"));
 tabTables.addEventListener("click", () => showTab("tables"));
 tabData.addEventListener("click", () => showTab("data"));
-
-const scratchEditor = initScratchEditor({ setStatus });
 
 continueBtn.addEventListener("click", () => {
   userPrompt.classList.add("hidden");

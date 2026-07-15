@@ -11,6 +11,11 @@ import {
   setupPassword,
   unlockWithPassword,
 } from "./src/core/personaldb.js";
+import {
+  loadTableForRef,
+  saveTable,
+  ScratchTable,
+} from "./src/core/scratchtable.js";
 
 const SESSION_KEY = "coscripter_session";
 
@@ -27,7 +32,11 @@ let runState = {
   runner: null,
   tabId: null,
   pendingNewTabId: null,
+  scratchTableId: null,
 };
+
+/** In-memory clipboard for scratchtable copy/paste within a run. */
+let scratchClipboard = "";
 
 // tabId -> { createdAt, openerTabId }; used to suppress spurious recorded
 // "switch to tab" steps right after a link opens or closes a tab.
@@ -365,10 +374,158 @@ function personalLookupError(resolved) {
   return `Unlock your data to use private value "${resolved.blockedKey}".`;
 }
 
+async function readCellValue(cellRef) {
+  const table = await loadTableForRef(cellRef, runState.scratchTableId);
+  if (!table) {
+    return { ok: false, error: cellRef.tableName
+      ? `No scratchtable named "${cellRef.tableName}".`
+      : "No scratchtable found. Create one in the Tables tab." };
+  }
+  const pos = table.resolveCellRef(cellRef);
+  if (!pos) {
+    return { ok: false, error: `Could not find cell ${Command.formatCellRef(cellRef)}.` };
+  }
+  runState.scratchTableId = table.id;
+  const cell = table.getCell(pos.row, pos.col);
+  return { ok: true, table, pos, text: cell.text, url: cell.url };
+}
+
+function looksLikeUrl(s) {
+  const t = (s || "").trim();
+  return /^https?:\/\//i.test(t) || /^www\./i.test(t);
+}
+
+async function executeScratchCellCommand(resolved, tabId) {
+  const ref = resolved.cellRef;
+  const table = await loadTableForRef(ref, runState.scratchTableId);
+  if (!table) {
+    return {
+      ok: false,
+      error: ref.tableName
+        ? `No scratchtable named "${ref.tableName}".`
+        : "No scratchtable found. Create one in the Tables tab.",
+    };
+  }
+  runState.scratchTableId = table.id;
+
+  const writeActions = [
+    ACTIONS.ENTER, ACTIONS.PUT, ACTIONS.APPEND,
+    ACTIONS.PASTE, ACTIONS.INCREMENT, ACTIONS.DECREMENT,
+  ];
+  const pos = writeActions.includes(resolved.action)
+    ? table.ensureCellRef(ref)
+    : table.resolveCellRef(ref);
+  if (!pos) {
+    return { ok: false, error: `Could not find cell ${Command.formatCellRef(ref)}.` };
+  }
+
+  switch (resolved.action) {
+    case ACTIONS.ENTER:
+    case ACTIONS.PUT:
+      table.setCellText(pos.row, pos.col, resolved.value ?? "");
+      await saveTable(table);
+      notifyPanel({ type: "SCRATCH_UPDATED", tableId: table.id });
+      return { ok: true };
+
+    case ACTIONS.APPEND: {
+      const existing = table.getCellText(pos.row, pos.col);
+      table.setCellText(pos.row, pos.col, existing + (resolved.value ?? ""));
+      await saveTable(table);
+      notifyPanel({ type: "SCRATCH_UPDATED", tableId: table.id });
+      return { ok: true };
+    }
+
+    case ACTIONS.COPY:
+    case ACTIONS.CLIP: {
+      const text = table.getCellText(pos.row, pos.col);
+      scratchClipboard = text;
+      try {
+        await chrome.tabs.sendMessage(tabId, { type: "SET_CLIPBOARD", text });
+      } catch (e) { /* page may be inaccessible */ }
+      return { ok: true };
+    }
+
+    case ACTIONS.PASTE: {
+      let text = scratchClipboard;
+      try {
+        const res = await chrome.tabs.sendMessage(tabId, { type: "GET_CLIPBOARD" });
+        if (res?.text) text = res.text;
+      } catch (e) { /* use scratch clipboard */ }
+      table.setCellText(pos.row, pos.col, text || "");
+      await saveTable(table);
+      notifyPanel({ type: "SCRATCH_UPDATED", tableId: table.id });
+      return { ok: true };
+    }
+
+    case ACTIONS.INCREMENT:
+    case ACTIONS.DECREMENT: {
+      const by = resolved.incrementBy || 1;
+      const delta = resolved.action === ACTIONS.DECREMENT ? -by : by;
+      const current = parseFloat(table.getCellText(pos.row, pos.col));
+      const next = (Number.isFinite(current) ? current : 0) + delta;
+      table.setCellText(pos.row, pos.col, String(next));
+      await saveTable(table);
+      notifyPanel({ type: "SCRATCH_UPDATED", tableId: table.id });
+      return { ok: true };
+    }
+
+    case ACTIONS.CLICK:
+    case ACTIONS.CONTROL_CLICK:
+    case ACTIONS.DOUBLE_CLICK: {
+      const cell = table.getCell(pos.row, pos.col);
+      let url = (cell.url || "").trim();
+      if (!url && looksLikeUrl(cell.text)) url = cell.text.trim();
+      if (!url) {
+        return { ok: false, error: "Scratchtable cell has no link URL to click." };
+      }
+      if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) url = "https://" + url;
+      if (resolved.action === ACTIONS.CONTROL_CLICK) {
+        const tab = await chrome.tabs.create({ url, active: true });
+        runState.tabId = tab.id;
+        await waitForNav(tab.id);
+        return { ok: true, tabId: tab.id };
+      }
+      await chrome.tabs.update(tabId, { url });
+      await waitForNav(tabId);
+      await delay(350);
+      return { ok: true };
+    }
+
+    default:
+      return { ok: false, error: `Cannot run "${resolved.action}" on a scratchtable cell.` };
+  }
+}
+
 async function runOne(cmd, tabId, db) {
   const resolved = await resolveCommand(cmd, db);
   const blocked = personalLookupError(resolved);
   if (blocked) return { ok: false, error: blocked };
+
+  // Resolve value from a scratchtable cell when the script says
+  // enter the cell … into the "Search" textbox
+  if (resolved.valueCellRef) {
+    const cellVal = await readCellValue(resolved.valueCellRef);
+    if (!cellVal.ok) return cellVal;
+    resolved.value = cellVal.text;
+    resolved.valueIsPersonal = false;
+  }
+
+  // Comparison against a scratchtable cell
+  if (
+    resolved.conditionType === "comparison" &&
+    (resolved.compareLeft?.isCellRef || resolved.compareRight?.isCellRef)
+  ) {
+    if (resolved.compareLeft?.isCellRef) {
+      const left = await readCellValue(resolved.compareLeft.cellRef);
+      if (!left.ok) return left;
+      resolved.compareLeftValue = left.text;
+    }
+    if (resolved.compareRight?.isCellRef) {
+      const right = await readCellValue(resolved.compareRight.cellRef);
+      if (!right.ok) return right;
+      resolved.compareRightValue = right.text;
+    }
+  }
 
   if (resolved.action === ACTIONS.YOU) {
     runState.waitingForUser = true;
@@ -390,6 +547,7 @@ async function runOne(cmd, tabId, db) {
   }
 
   if (resolved.action === ACTIONS.INCREMENT) {
+    if (resolved.cellRef) return executeScratchCellCommand(resolved, tabId);
     db.increment(resolved.personalKey || resolved.label, resolved.incrementBy || 1);
     await db.save();
     notifyPanel({ type: "PDB_UPDATED", text: db.text });
@@ -397,6 +555,7 @@ async function runOne(cmd, tabId, db) {
   }
 
   if (resolved.action === ACTIONS.DECREMENT) {
+    if (resolved.cellRef) return executeScratchCellCommand(resolved, tabId);
     db.decrement(resolved.personalKey || resolved.label, resolved.incrementBy || 1);
     await db.save();
     notifyPanel({ type: "PDB_UPDATED", text: db.text });
@@ -523,6 +682,10 @@ async function runOne(cmd, tabId, db) {
     return evaluateCondition(resolved, tabId);
   }
 
+  if (resolved.cellRef) {
+    return executeScratchCellCommand(resolved, tabId);
+  }
+
   return runPageCommand(resolved, tabId);
 }
 
@@ -590,6 +753,7 @@ async function runScript(text, tabId) {
     runner,
     tabId,
     pendingNewTabId: null,
+    scratchTableId: null,
   };
   notifyPanel({ type: "RUN_STATE", running: true });
 

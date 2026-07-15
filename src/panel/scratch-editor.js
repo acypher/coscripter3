@@ -298,6 +298,16 @@ export function initScratchEditor({ setStatus }) {
       await refreshLibrary();
       renderGrid();
     },
+    async reloadIf(tableId) {
+      if (!tableId || tableId !== current.id) {
+        await refreshLibrary();
+        return;
+      }
+      if (dirty) return; // don't clobber in-progress edits
+      const loaded = await getTable(tableId);
+      if (loaded) loadIntoUi(loaded);
+      await refreshLibrary();
+    },
     getCurrent() {
       return current;
     },

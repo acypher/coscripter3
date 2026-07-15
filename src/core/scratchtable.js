@@ -132,6 +132,70 @@ export class ScratchTable {
     return -1;
   }
 
+  /**
+   * Find a data row by label. Prefers an exact match in column 0, then any
+   * column. Returns 0-based row index or -1.
+   */
+  findRow(label) {
+    const wanted = lower(label);
+    if (!wanted) return -1;
+    for (let r = 0; r < this.rows.length; r++) {
+      if (lower(this.getCellText(r, 0)) === wanted) return r;
+    }
+    for (let r = 0; r < this.rows.length; r++) {
+      for (let c = 0; c < this.columns.length; c++) {
+        if (lower(this.getCellText(r, c)) === wanted) return r;
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Resolve a parsed cellRef to 0-based { row, col }.
+   * Row/column numbers in cellRef are 1-based (ClearScript "row 2" → index 1).
+   * Returns null if the cell cannot be found.
+   */
+  resolveCellRef(ref) {
+    if (!ref) return null;
+    let col = -1;
+    if (ref.columnLabel) col = this.findColumn(ref.columnLabel);
+    else if (ref.columnNumber > 0) col = ref.columnNumber - 1;
+
+    let row = -1;
+    if (ref.rowLabel) row = this.findRow(ref.rowLabel);
+    else if (ref.rowNumber > 0) row = ref.rowNumber - 1;
+
+    if (row < 0 || col < 0) return null;
+    if (row >= this.rows.length || col >= this.columns.length) return null;
+    return { row, col };
+  }
+
+  /** Ensure the cell exists (growing the table if needed), then return indices. */
+  ensureCellRef(ref) {
+    if (!ref) return null;
+    let col = -1;
+    if (ref.columnLabel) {
+      col = this.findColumn(ref.columnLabel);
+      if (col < 0) col = this.addColumn(ref.columnLabel);
+    } else if (ref.columnNumber > 0) {
+      this.ensureSize(this.rows.length, ref.columnNumber);
+      col = ref.columnNumber - 1;
+    }
+    let row = -1;
+    if (ref.rowLabel) {
+      row = this.findRow(ref.rowLabel);
+      if (row < 0) {
+        row = this.addRow();
+        if (this.columns.length) this.setCellText(row, 0, ref.rowLabel);
+      }
+    } else if (ref.rowNumber > 0) {
+      this.ensureSize(ref.rowNumber, this.columns.length);
+      row = ref.rowNumber - 1;
+    }
+    if (row < 0 || col < 0) return null;
+    return { row, col };
+  }
+
   getCell(rowIndex, columnIndex) {
     const cell = this.rows[rowIndex]?.[columnIndex];
     return cell ? { text: cell.text, url: cell.url } : emptyCell();
@@ -322,6 +386,22 @@ export async function getTableByName(name) {
     }
   }
   return bestScore >= 0.5 ? ScratchTable.fromJSON(best) : null;
+}
+
+/**
+ * Load the table named in cellRef, or the most recently updated table when
+ * the ref has no table name ("the scratchtable").
+ */
+export async function loadTableForRef(cellRef, preferredId = null) {
+  if (cellRef?.tableName) {
+    return getTableByName(cellRef.tableName);
+  }
+  if (preferredId) {
+    const t = await getTable(preferredId);
+    if (t) return t;
+  }
+  const list = await listTables();
+  return list[0] || null;
 }
 
 /** Create or update. Returns the saved ScratchTable. */

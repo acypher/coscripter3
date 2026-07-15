@@ -133,6 +133,14 @@ async function readClipboard() {
   return clipboardCache;
 }
 
+export async function setClipboard(text) {
+  await copyToClipboard(text ?? "");
+}
+
+export async function getClipboard() {
+  return readClipboard();
+}
+
 function doDoubleClick(el) {
   el.focus({ preventScroll: true });
   mouseEvent(el, "mousedown");
