@@ -112,15 +112,24 @@ export async function setupPassword(password) {
 }
 
 /**
- * Wipe all private entries and password metadata. Public entries are kept.
- * After this, the user can set a new password when saving private values again.
+ * Clear the password and wipe every private *value*, but keep the private
+ * key rows (e.g. `*password = `) so the user can fill them in again.
+ * Public entries are unchanged.
  */
 export async function resetPrivateData() {
   lock();
-  const data = await chrome.storage.local.get(STORAGE_KEY);
+  const data = await chrome.storage.local.get([STORAGE_KEY, CRYPTO_KEY]);
   const publicText = data[STORAGE_KEY] || "";
+  const secrets = data[CRYPTO_KEY]?.secrets || [];
   await chrome.storage.local.remove(CRYPTO_KEY);
-  return { ok: true, text: publicText };
+
+  const lines = [];
+  if (publicText.trim()) lines.push(publicText.trimEnd());
+  for (const secret of secrets) {
+    const key = String(secret.key || "").trim();
+    if (key) lines.push(`*${key} = `);
+  }
+  return { ok: true, text: lines.join("\n") };
 }
 
 export class PersonalDB {

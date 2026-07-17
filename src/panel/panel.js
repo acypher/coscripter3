@@ -534,7 +534,7 @@ async function unlockPdb() {
 
 async function resetPdbPassword() {
   const ok = window.confirm(
-    "Reset Password deletes every private (*…) value and clears the password. Public entries are kept. Continue?"
+    "Reset Password clears every private value and the password. Private key names (e.g. *password) are kept empty so you can refill them. Public entries are unchanged. Continue?"
   );
   if (!ok) return;
   const res = await send({ type: "RESET_PDB_PASSWORD" });
@@ -548,7 +548,7 @@ async function resetPdbPassword() {
       showReset: false,
     };
     updatePdbAuthUi();
-    setStatus("Private data cleared. Add *entries and Save to set a new password.", "ok");
+    setStatus("Private values cleared. Fill *entries and Save to set a new password.", "ok");
     return;
   }
   setStatus((res && res.error) || "Could not reset password.", "error");

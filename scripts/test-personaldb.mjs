@@ -125,10 +125,12 @@ const {
   const reset = await resetPrivateData();
   check("reset ok", reset.ok, true);
   check("crypto gone", await hasStoredCrypto(), false);
-  check("public text empty or public-only", (reset.text || "").includes("*"), false);
+  check("keeps private key row", reset.text.includes("*secret ="), true);
+  check("clears private value", /\*secret\s*=\s*$/m.test(reset.text), true);
 
   const after = await PersonalDB.load();
-  check("no private after reset", after.hasPrivateEntries(), false);
+  // Keys remain only in the editor text until Save; storage has no crypto.
+  check("no encrypted private after reset", after.hasPrivateEntries(), false);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
