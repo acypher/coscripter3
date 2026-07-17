@@ -115,6 +115,12 @@ function setCurrentStep(lineNumber) {
   setStatus(`Current command: line ${i + 1}.`);
 }
 
+let previewGen = 0;
+
+function delay(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 function highlightUpcomingStep(fromIndex = 0) {
   const i = scriptEditor.nextExecutable(fromIndex);
   if (i === -1) {
@@ -128,26 +134,46 @@ function highlightUpcomingStep(fromIndex = 0) {
   scriptEditor.scrollLineIntoView(i);
 }
 
-async function refreshCcPreview(lineIndex = state.stepLine) {
-  scriptEditor.clearDot();
+/**
+ * Refresh the CC match Dot / page highlight.
+ * Retries help after navigation (e.g. Step on "go to" then preview the next click).
+ */
+async function refreshCcPreview(lineIndex = state.stepLine, { retries = 8 } = {}) {
+  const gen = ++previewGen;
   const line = lineText(lineIndex);
   if (!line || scriptEditor.isComment(lineIndex) || !scriptEditor.isExecutable(lineIndex)) {
+    if (gen !== previewGen) return;
+    scriptEditor.clearDot();
     const tabId = await getActiveTabId();
     if (tabId != null) await send({ type: "CLEAR_PREVIEW", tabId });
     return;
   }
-  const tabId = await getActiveTabId();
-  if (tabId == null) return;
-  const res = await send({ type: "PREVIEW_STEP", line, tabId });
-  if (!res || !res.ok) {
-    if (res && res.hasTarget) scriptEditor.setDot("red");
-    return;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (gen !== previewGen) return;
+    const tabId = await getActiveTabId();
+    if (tabId == null) {
+      scriptEditor.clearDot();
+      return;
+    }
+    const res = await send({ type: "PREVIEW_STEP", line, tabId });
+    if (gen !== previewGen) return;
+
+    if (!res || res.skipped || res.hasTarget === false) {
+      scriptEditor.clearDot();
+      return;
+    }
+
+    // hasTarget (page match, go to, if, etc.): always show green or red
+    if (res.found) {
+      scriptEditor.setDot("green");
+      return;
+    }
+
+    // Not found yet — show red, but keep retrying after nav/load
+    scriptEditor.setDot("red");
+    if (attempt < retries) await delay(400);
   }
-  if (!res.hasTarget || res.skipped) {
-    scriptEditor.clearDot();
-    return;
-  }
-  scriptEditor.setDot(res.found ? "green" : "red");
 }
 
 function setRecording(on) {
@@ -317,8 +343,27 @@ async function stepScript() {
     return;
   }
   scriptEditor.clearDot();
-  await send({ type: "RUN_STEP", line: lineText(i), lineNumber: i, tabId });
-  state.stepLine = i + 1;
+  const res = await send({ type: "RUN_STEP", line: lineText(i), lineNumber: i, tabId });
+  if (res && res.ok) {
+    // Advance CC and re-preview even if RUN_PROGRESS messages were reordered.
+    state.stepLine = i + 1;
+    const next = scriptEditor.nextExecutable(i + 1);
+    if (next === -1) {
+      highlightUpcomingStep(0);
+      setStatus("End of script. Step reset to top.");
+      return;
+    }
+    state.stepLine = next;
+    scriptEditor.setCurrent(next, { notify: false });
+    scriptEditor.scrollLineIntoView(next);
+    setStatus(`Current command: line ${next + 1}.`);
+    await refreshCcPreview(next, { retries: 10 });
+  } else {
+    state.stepLine = i;
+    scriptEditor.setCurrent(i, { notify: false });
+    scriptEditor.setDot("red");
+    setStatus((res && res.error) || "Step failed.", "error");
+  }
 }
 
 function stopRun() {
@@ -462,19 +507,27 @@ chrome.runtime.onMessage.addListener((msg) => {
       break;
     case "RUN_PROGRESS":
       if (msg.status === "running") {
-        state.stepLine = msg.lineNumber;
-        scriptEditor.setCurrent(msg.lineNumber, { notify: false });
-        scriptEditor.clearDot();
-        scriptEditor.scrollLineIntoView(msg.lineNumber);
         setStatus(`Running: ${msg.text}`, "run");
+        // Full Run owns CC updates here. Step owns CC in stepScript (avoids
+        // out-of-order progress messages clearing the next line's Dot).
+        if (state.running) {
+          state.stepLine = msg.lineNumber;
+          scriptEditor.setCurrent(msg.lineNumber, { notify: false });
+          scriptEditor.clearDot();
+          scriptEditor.scrollLineIntoView(msg.lineNumber);
+        }
       } else if (msg.status === "ok") {
-        state.stepLine = msg.lineNumber + 1;
-        highlightUpcomingStep(msg.lineNumber + 1);
         setStatus(`OK: ${msg.text}`, "ok");
+        if (state.running) {
+          state.stepLine = msg.lineNumber + 1;
+          highlightUpcomingStep(msg.lineNumber + 1);
+        }
       } else if (msg.status === "skipped") {
-        state.stepLine = msg.lineNumber + 1;
-        highlightUpcomingStep(msg.lineNumber + 1);
         setStatus("Skipped.", "ok");
+        if (state.running) {
+          state.stepLine = msg.lineNumber + 1;
+          highlightUpcomingStep(msg.lineNumber + 1);
+        }
       } else if (msg.status === "error") {
         state.stepLine = msg.lineNumber;
         scriptEditor.setCurrent(msg.lineNumber, { notify: false });

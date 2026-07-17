@@ -1162,16 +1162,24 @@ async function handle(msg, sender, sendResponse) {
         sendResponse({ ok: false, error: "Page not accessible.", hasTarget: true, found: false });
         return;
       }
-      const res = await chrome.tabs.sendMessage(msg.tabId, {
-        type: "PREVIEW",
-        command: plainCommand(resolved),
-      });
-      sendResponse({
-        ok: true,
-        hasTarget: true,
-        found: !!(res && res.found),
-        ...(res || {}),
-      });
+      try {
+        const res = await chrome.tabs.sendMessage(msg.tabId, {
+          type: "PREVIEW",
+          command: plainCommand(resolved),
+        });
+        sendResponse({
+          ok: true,
+          hasTarget: true,
+          found: !!(res && res.found),
+        });
+      } catch (e) {
+        sendResponse({
+          ok: false,
+          error: String(e.message || e),
+          hasTarget: true,
+          found: false,
+        });
+      }
       return;
     }
 
