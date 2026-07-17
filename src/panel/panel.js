@@ -355,6 +355,11 @@ async function stepScript() {
       setStatus("End of script. Step reset to top.");
       return;
     }
+    // If we just evaluated an if, show green/red for the condition before jumping.
+    if (typeof res.conditionResult === "boolean") {
+      scriptEditor.setCurrent(i, { notify: false });
+      scriptEditor.setDot(res.conditionResult ? "green" : "red");
+    }
     // nextLine comes from ScriptRunner (if-branch / advance), not i+1.
     let next = typeof res.nextLine === "number" ? res.nextLine : i + 1;
     if (next >= scriptEditor.lineCount()) {

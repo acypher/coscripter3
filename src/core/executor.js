@@ -14,7 +14,7 @@ function ensureHighlightStyle() {
   style.id = "__coscripter_style__";
   style.textContent = `
     .${HIGHLIGHT_CLASS}{outline:3px solid #ff5a36 !important;outline-offset:2px !important;transition:outline 0.1s;}
-    .${PREVIEW_CLASS}{outline:2px solid rgba(47, 109, 246, 0.85) !important;outline-offset:2px !important;}
+    .${PREVIEW_CLASS}{outline:2px solid #169a5b !important;outline-offset:2px !important;}
   `;
   (document.head || document.documentElement).appendChild(style);
 }
