@@ -306,8 +306,9 @@ async function findTabByTitle(title) {
 }
 
 async function resolveCommand(cmd, db) {
+  // PersonalDB.resolve spreads into a plain object (no prototype methods).
   const resolved = db.resolve(new Command(cmd));
-  return resolved;
+  return new Command(resolved);
 }
 
 async function runPageCommand(cmd, tabId) {
