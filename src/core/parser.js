@@ -21,8 +21,11 @@ const TYPE_WORDS_RE = /\b(?:radio button|radio|check ?box|text ?box|text ?area|i
 const STOP_WORDS_RE = /\b(?:the|a|an|on|into|in|to|from|that|there|is|are|it|your|appears?|exists?)\b/gi;
 
 export function getSlop(line) {
-  const m = line.match(/^\s*(\*+)\s+(.*)$/);
-  if (m) return [m[1].length, m[2].trim()];
+  const star = line.match(/^\s*(\*+)\s*(.*)$/);
+  if (star) return [star[1].length, star[2].trim()];
+  // Leading "-" marks an explicit comment (does nothing).
+  const dash = line.match(/^\s*-\s?(.*)$/);
+  if (dash) return [0, dash[1].trim()];
   return [0, line.trim()];
 }
 

@@ -33,6 +33,7 @@
       execute: executorMod.execute,
       checkCondition: executorMod.checkCondition,
       preview: executorMod.preview,
+      clearPreview: executorMod.clearPreview,
       Command: commandsMod.Command,
       elementExists: labelerMod.elementExists,
       readElementValue: labelerMod.readElementValue,
@@ -135,6 +136,16 @@
     if (msg.type === "PREVIEW") {
       ready
         .then(({ preview, Command }) => sendResponse(preview(new Command(msg.command))))
+        .catch(() => sendResponse({ ok: false, found: false }));
+      return true;
+    }
+
+    if (msg.type === "CLEAR_PREVIEW") {
+      ready
+        .then(({ clearPreview }) => {
+          clearPreview(document);
+          sendResponse({ ok: true });
+        })
         .catch(() => sendResponse({ ok: false }));
       return true;
     }

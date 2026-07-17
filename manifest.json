@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Coscripter3",
-  "version": "0.13.1",
+  "version": "0.13.2",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAkKISQ+xXy+/MSYwh6hyvqdIuYchweBWWqsQ/AYfvhvxaNGZpglM1R6FLIMu9WCazAMVCE5SW528o2kdqohdDdKpOm24nuDbXeHhJ4MKhRxtZbk49pzlSKF72vH9R44/mDbGnlJ3d7qgvONsVUCNfaUh16eCk/0uV7fTPxkrfs75ek6GS+AQq4r1VhultohnRWhUmVp0o0TtByEHNzIdaPk8MPi8Auv4l2BqnL9F7m4nWs/JHK19QXJwZtrBbLhgJtXAtTTqtnAxl9NVewRp0vo19FMDDnugUGNB0JPKpSEAR3c8gMVjQDD+ofnLAFNE7JQQY1xd/pnxniPI5wKFZuwIDAQAB",
   "description": "Record, edit, and replay web tasks as human-readable scripts. A modern Chrome remake of IBM's CoScripter.",
   "icons": {

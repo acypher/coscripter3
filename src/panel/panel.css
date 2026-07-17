@@ -219,60 +219,115 @@ body {
   border-radius: 10px;
   overflow: hidden;
   background: var(--panel);
+  min-height: 180px;
 }
 
-.cs-backdrop,
-.cs-editor {
-  margin: 0;
-  border: 0;
-  /* extra left padding is the gutter for status bullets */
-  padding: 12px 14px 12px 30px;
-  font-family: var(--mono);
-  font-size: 12.5px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  letter-spacing: 0;
-  tab-size: 2;
-}
-
-.cs-backdrop {
+.cs-script-editor {
   position: absolute;
   inset: 0;
   overflow: auto;
-  color: transparent;
-  pointer-events: none;
-}
-#highlights mark {
-  border-radius: 3px;
-  color: transparent;
-}
-#highlights mark.run {
-  background: var(--highlight-run);
-}
-#highlights mark.ok {
-  background: var(--highlight-ok);
-}
-#highlights mark.error {
-  background: var(--highlight-error);
-}
-#highlights mark.next {
-  background: var(--highlight-next);
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text);
+  outline: none;
 }
 
-.cs-editor {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  resize: none;
-  background: transparent;
-  color: var(--text);
-  caret-color: var(--accent);
+.cs-script-line {
+  display: grid;
+  grid-template-columns: 18px max-content 1fr;
+  align-items: start;
+  gap: 4px 6px;
+  min-height: 1.6em;
+  border-radius: 4px;
 }
-.cs-editor:focus {
+
+.cs-script-line.cs-cc .cs-prefix,
+.cs-script-line.cs-cc .cs-text {
+  background: var(--highlight-next);
+  border-radius: 3px;
+}
+
+.cs-dot-slot {
+  width: 18px;
+  height: 1.6em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cs-match-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: block;
+}
+.cs-match-dot.green {
+  background: var(--ok);
+}
+.cs-match-dot.red {
+  background: var(--error);
+}
+
+.cs-prefix {
+  cursor: cell;
+  user-select: none;
+  padding: 0 4px;
+  color: var(--muted);
+  white-space: pre;
+  border-radius: 3px;
+}
+.cs-prefix:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--text);
+}
+
+.cs-text {
+  cursor: text;
+  min-width: 0;
+  padding: 0 4px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
   outline: none;
+  caret-color: var(--accent);
+  border-radius: 3px;
+}
+.cs-text:focus {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.cs-prefix-menu {
+  position: absolute;
+  z-index: 20;
+  min-width: 48px;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cs-prefix-menu-item {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+}
+.cs-prefix-menu-item:hover,
+.cs-prefix-menu-item.selected {
+  background: var(--highlight-next);
 }
 
 .cs-footer {
@@ -579,35 +634,4 @@ body {
 .cs-error-actions {
   display: flex;
   gap: 6px;
-}
-
-.cs-line {
-  position: relative;
-  min-height: 1.6em;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-}
-.cs-bullet {
-  position: absolute;
-  left: -20px;
-  top: 0.45em;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-}
-.cs-bullet.run,
-.cs-bullet.next {
-  background: var(--warn);
-}
-.cs-bullet.ok {
-  background: var(--ok);
-}
-.cs-bullet.error {
-  background: var(--error);
-}
-.cs-bullet.skipped {
-  background: var(--muted);
-}
-#highlights mark.skipped {
-  background: color-mix(in srgb, var(--muted) 20%, transparent);
 }

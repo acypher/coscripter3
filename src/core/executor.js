@@ -6,15 +6,25 @@ import { findElementInFrames, elementExists } from "./labeler.js";
 const HIGHLIGHT_CLASS = "__coscripter_highlight__";
 let clipboardCache = "";
 
+const PREVIEW_CLASS = "__coscripter_preview__";
+
 function ensureHighlightStyle() {
   if (document.getElementById("__coscripter_style__")) return;
   const style = document.createElement("style");
   style.id = "__coscripter_style__";
   style.textContent = `
     .${HIGHLIGHT_CLASS}{outline:3px solid #ff5a36 !important;outline-offset:2px !important;transition:outline 0.1s;}
-    .__coscripter_preview__{outline:2px dashed #2f6df6 !important;outline-offset:2px !important;}
+    .${PREVIEW_CLASS}{outline:2px solid rgba(47, 109, 246, 0.85) !important;outline-offset:2px !important;}
   `;
   (document.head || document.documentElement).appendChild(style);
+}
+
+export function clearPreview(doc = document) {
+  try {
+    doc.querySelectorAll(`.${PREVIEW_CLASS}`).forEach((el) => {
+      el.classList.remove(PREVIEW_CLASS);
+    });
+  } catch (e) { /* ignore */ }
 }
 
 function flash(el) {
@@ -195,13 +205,15 @@ export function checkCondition(command) {
 }
 
 export function preview(command) {
+  ensureHighlightStyle();
+  clearPreview(document);
   const el = findElementInFrames(command, document);
-  if (!el) return { ok: false, error: "Not found." };
+  if (!el) return { ok: true, found: false };
   try {
-    el.scrollIntoView({ block: "center", inline: "center" });
-    flash(el);
+    el.scrollIntoView({ block: "center", inline: "nearest" });
+    el.classList.add(PREVIEW_CLASS);
   } catch (e) { /* ignore */ }
-  return { ok: true };
+  return { ok: true, found: true };
 }
 
 export async function execute(command) {

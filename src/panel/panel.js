@@ -2,10 +2,9 @@
 
 import { listScripts, getScript, saveScript, deleteScript } from "../core/storage.js";
 import { initScratchEditor } from "./scratch-editor.js";
+import { initScriptEditor } from "./script-editor.js";
 
-const editor = document.getElementById("editor");
-const highlights = document.getElementById("highlights");
-const backdrop = document.getElementById("backdrop");
+const scriptEditorRoot = document.getElementById("scriptEditor");
 const scriptName = document.getElementById("scriptName");
 const scriptList = document.getElementById("scriptList");
 const scriptCount = document.getElementById("scriptCount");
@@ -54,7 +53,6 @@ let state = {
   recording: false,
   running: false,
   stepLine: 0,
-  lineStatus: {},
 };
 
 function setStatus(text, kind = "") {
@@ -62,13 +60,27 @@ function setStatus(text, kind = "") {
   statusEl.className = "cs-status" + (kind ? " " + kind : "");
 }
 
+let scriptEditor;
+
 function appendStep(slop) {
-  const prefix = editor.value.length && !editor.value.endsWith("\n") ? "\n" : "";
-  editor.value += `${prefix}* ${slop}\n`;
-  renderHighlights();
-  editor.scrollTop = editor.scrollHeight;
-  syncScroll();
+  scriptEditor.appendStep(slop);
+  scriptEditorRoot.scrollTop = scriptEditorRoot.scrollHeight;
 }
+
+scriptEditor = initScriptEditor({
+  root: scriptEditorRoot,
+  onSetCurrent: (lineIndex) => {
+    state.stepLine = lineIndex;
+    refreshCcPreview(lineIndex);
+    setStatus(`Current command: line ${lineIndex + 1}.`);
+  },
+  onChange: () => {
+    // Keep CC; do not reset stepLine on edits.
+  },
+  onTextEdit: () => {
+    // Typing does not change CC or trigger preview.
+  },
+});
 
 const scratchEditor = initScratchEditor({ setStatus, appendStep });
 
@@ -81,96 +93,61 @@ function send(message) {
   return chrome.runtime.sendMessage(message).catch(() => ({ ok: false }));
 }
 
-function escapeHtml(s) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-function renderHighlights(activeLine = -1, activeStatus = "") {
-  const lines = editor.value.split("\n");
-  // One block div per line so bullets can sit in the gutter (absolutely
-  // positioned) without shifting the text out of alignment with the textarea.
-  const html = lines
-    .map((line, i) => {
-      const safe = escapeHtml(line) || " ";
-      const st = state.lineStatus[i];
-      let cls = "";
-      if (i === activeLine && activeStatus) cls = activeStatus;
-      else if (st) cls = st;
-      const isStep = /^\s*\*+\s+\S/.test(line);
-      const bullet = isStep && cls ? `<span class="cs-bullet ${cls}"></span>` : "";
-      const content = cls ? `<mark class="${cls}">${safe}</mark>` : safe;
-      return `<div class="cs-line">${bullet}${content}</div>`;
-    })
-    .join("");
-  highlights.innerHTML = html;
-  syncScroll();
-}
-
-function setActiveLine(lineNumber, status) {
-  renderHighlights(lineNumber, status);
-  scrollLineIntoView(lineNumber);
-}
-
-function clearHighlight() {
-  state.lineStatus = {};
-  renderHighlights();
-}
-
-function nextExecutableLine(fromIndex) {
-  const lines = editor.value.split("\n");
-  for (let i = Math.max(0, fromIndex); i < lines.length; i++) {
-    if (/^\s*\*+\s+\S/.test(lines[i])) return i;
-  }
-  return -1;
-}
-
-function highlightUpcomingStep(fromIndex = 0) {
-  const i = nextExecutableLine(fromIndex);
-  if (i === -1) clearHighlight();
-  else setActiveLine(i, "next");
+function lineText(lineIndex) {
+  const line = scriptEditor.getLine(lineIndex);
+  if (!line) return "";
+  return scriptEditor.serializeLine(line);
 }
 
 /** Set the next Step/Run line (0-based). Snaps forward to an executable step. */
 function setCurrentStep(lineNumber) {
-  const i = nextExecutableLine(lineNumber);
+  const i = scriptEditor.nextExecutable(lineNumber);
   if (i === -1) {
     state.stepLine = 0;
-    clearHighlight();
+    scriptEditor.setCurrent(0);
+    scriptEditor.clearDot();
     setStatus("No step at or after that line.");
     return;
   }
   state.stepLine = i;
-  highlightUpcomingStep(i);
-  setStatus(`Next step: line ${i + 1}.`);
+  scriptEditor.setCurrent(i);
+  scriptEditor.scrollLineIntoView(i);
+  setStatus(`Current command: line ${i + 1}.`);
 }
 
-/** True if the click landed on a step's leading * (or the left gutter). */
-function isClickOnStepStar(e, line, col) {
-  if (!/^\s*\*+\s+\S/.test(line)) return false;
-  const m = line.match(/^(\s*)(\*+)/);
-  if (!m) return false;
-  const starsStart = m[1].length;
-  const starsEnd = starsStart + m[2].length;
-  const onStars = col >= starsStart && col <= starsEnd;
-  const inGutter = e.offsetX < 30;
-  return onStars || inGutter;
-}
-
-function syncScroll() {
-  backdrop.scrollTop = editor.scrollTop;
-  backdrop.scrollLeft = editor.scrollLeft;
-}
-
-function scrollLineIntoView(lineNumber) {
-  const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 20;
-  const top = lineNumber * lineHeight;
-  if (top < editor.scrollTop || top > editor.scrollTop + editor.clientHeight - lineHeight * 2) {
-    editor.scrollTop = Math.max(0, top - editor.clientHeight / 2);
-    syncScroll();
+function highlightUpcomingStep(fromIndex = 0) {
+  const i = scriptEditor.nextExecutable(fromIndex);
+  if (i === -1) {
+    state.stepLine = 0;
+    scriptEditor.clearDot();
+    if (scriptEditor.lineCount() > 0) scriptEditor.setCurrent(0, { notify: true });
+    return;
   }
+  state.stepLine = i;
+  scriptEditor.setCurrent(i, { notify: true });
+  scriptEditor.scrollLineIntoView(i);
+}
+
+async function refreshCcPreview(lineIndex = state.stepLine) {
+  scriptEditor.clearDot();
+  const line = lineText(lineIndex);
+  if (!line || scriptEditor.isComment(lineIndex) || !scriptEditor.isExecutable(lineIndex)) {
+    const tabId = await getActiveTabId();
+    if (tabId != null) await send({ type: "CLEAR_PREVIEW", tabId });
+    return;
+  }
+  const tabId = await getActiveTabId();
+  if (tabId == null) return;
+  const res = await send({ type: "PREVIEW_STEP", line, tabId });
+  if (!res || !res.ok) {
+    if (res && res.hasTarget) scriptEditor.setDot("red");
+    return;
+  }
+  if (!res.hasTarget || res.skipped) {
+    scriptEditor.clearDot();
+    return;
+  }
+  scriptEditor.setDot(res.found ? "green" : "red");
 }
 
 function setRecording(on) {
@@ -238,9 +215,8 @@ async function loadScript(id) {
   const s = await getScript(id);
   if (!s) return;
   state.currentId = s.id;
-  state.stepLine = 0;
   scriptName.value = s.name;
-  editor.value = s.text;
+  scriptEditor.setText(s.text);
   highlightUpcomingStep(0);
   await refreshLibrary();
   setStatus(`Loaded "${s.name}".`);
@@ -321,10 +297,9 @@ async function runScript() {
     return;
   }
   const startLine = state.stepLine || 0;
-  state.lineStatus = {};
-  clearHighlight();
+  scriptEditor.clearDot();
   setStatus(startLine > 0 ? `Running from line ${startLine + 1}…` : "Running…", "run");
-  await send({ type: "RUN_SCRIPT", script: editor.value, tabId, startLine });
+  await send({ type: "RUN_SCRIPT", script: scriptEditor.getText(), tabId, startLine });
 }
 
 async function stepScript() {
@@ -333,16 +308,16 @@ async function stepScript() {
     setStatus("No active tab.", "error");
     return;
   }
-  const lines = editor.value.split("\n");
   let i = state.stepLine;
-  while (i < lines.length && !/^\s*\*+\s+\S/.test(lines[i])) i++;
-  if (i >= lines.length) {
+  i = scriptEditor.nextExecutable(i);
+  if (i === -1) {
     state.stepLine = 0;
     setStatus("End of script. Step reset to top.");
     highlightUpcomingStep(0);
     return;
   }
-  await send({ type: "RUN_STEP", line: lines[i], lineNumber: i, tabId });
+  scriptEditor.clearDot();
+  await send({ type: "RUN_STEP", line: lineText(i), lineNumber: i, tabId });
   state.stepLine = i + 1;
 }
 
@@ -355,7 +330,7 @@ async function doSave() {
   const saved = await saveScript({
     id: state.currentId,
     name: scriptName.value.trim() || "Untitled",
-    text: editor.value,
+    text: scriptEditor.getText(),
   });
   state.currentId = saved.id;
   await refreshLibrary();
@@ -366,11 +341,12 @@ function doNew() {
   state.currentId = null;
   state.stepLine = 0;
   scriptName.value = "";
-  editor.value = "";
-  clearHighlight();
+  scriptEditor.setText("");
+  scriptEditor.setCurrent(0);
+  scriptEditor.clearDot();
   refreshLibrary();
   setStatus("New script.");
-  editor.focus();
+  scriptEditorRoot.focus();
 }
 
 async function doDelete() {
@@ -385,7 +361,7 @@ async function doDelete() {
 
 function doExport() {
   const name = (scriptName.value.trim() || "coscript").replace(/[^\w.-]+/g, "_");
-  const blob = new Blob([editor.value], { type: "text/plain" });
+  const blob = new Blob([scriptEditor.getText()], { type: "text/plain" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -397,28 +373,13 @@ function doExport() {
 function doImport(file) {
   const reader = new FileReader();
   reader.onload = () => {
-    editor.value = String(reader.result || "");
+    scriptEditor.setText(String(reader.result || ""));
     state.currentId = null;
-    state.stepLine = 0;
     scriptName.value = file.name.replace(/\.[^.]+$/, "");
     highlightUpcomingStep(0);
     setStatus(`Imported "${file.name}".`);
   };
   reader.readAsText(file);
-}
-
-let lastPreviewLine = -1;
-
-async function previewCurrentLine() {
-  const pos = editor.selectionStart;
-  const lineNumber = editor.value.slice(0, pos).split("\n").length - 1;
-  if (lineNumber === lastPreviewLine) return;
-  lastPreviewLine = lineNumber;
-  const line = editor.value.split("\n")[lineNumber];
-  if (!line || !/^\s*\*+\s+\S/.test(line)) return;
-  const tabId = await getActiveTabId();
-  if (tabId == null) return;
-  await send({ type: "PREVIEW_STEP", line, tabId });
 }
 
 async function savePdb() {
@@ -496,25 +457,28 @@ chrome.runtime.onMessage.addListener((msg) => {
       setRunning(!!msg.running);
       if (!msg.running && !statusEl.classList.contains("error")) {
         setStatus("Done.", "ok");
+        highlightUpcomingStep(state.stepLine);
       }
       break;
     case "RUN_PROGRESS":
       if (msg.status === "running") {
-        setActiveLine(msg.lineNumber, "run");
+        state.stepLine = msg.lineNumber;
+        scriptEditor.setCurrent(msg.lineNumber, { notify: false });
+        scriptEditor.clearDot();
+        scriptEditor.scrollLineIntoView(msg.lineNumber);
         setStatus(`Running: ${msg.text}`, "run");
       } else if (msg.status === "ok") {
-        state.lineStatus[msg.lineNumber] = "ok";
         state.stepLine = msg.lineNumber + 1;
         highlightUpcomingStep(msg.lineNumber + 1);
         setStatus(`OK: ${msg.text}`, "ok");
       } else if (msg.status === "skipped") {
-        state.lineStatus[msg.lineNumber] = "skipped";
         state.stepLine = msg.lineNumber + 1;
         highlightUpcomingStep(msg.lineNumber + 1);
         setStatus("Skipped.", "ok");
       } else if (msg.status === "error") {
         state.stepLine = msg.lineNumber;
-        setActiveLine(msg.lineNumber, "error");
+        scriptEditor.setCurrent(msg.lineNumber, { notify: false });
+        scriptEditor.setDot("red");
         setStatus(`Error: ${msg.text}`, "error");
       }
       break;
@@ -522,7 +486,8 @@ chrome.runtime.onMessage.addListener((msg) => {
       userPromptText.textContent = msg.text || "Complete the action, then click Continue.";
       userPrompt.classList.remove("hidden");
       errorPrompt.classList.add("hidden");
-      setActiveLine(msg.lineNumber, "run");
+      state.stepLine = msg.lineNumber;
+      scriptEditor.setCurrent(msg.lineNumber, { notify: false });
       setStatus("Waiting for you…", "run");
       break;
     case "ERROR_PROMPT":
@@ -553,33 +518,6 @@ chrome.runtime.onMessage.addListener((msg) => {
       updatePdbAuthUi();
       break;
   }
-});
-
-const PREVIEW_KEYS = new Set([
-  "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown",
-]);
-
-editor.addEventListener("scroll", syncScroll);
-editor.addEventListener("input", () => {
-  state.stepLine = 0;
-  lastPreviewLine = -1; // typing shouldn't trigger a preview on the next keyup
-  renderHighlights();
-});
-editor.addEventListener("click", (e) => {
-  const pos = editor.selectionStart;
-  const before = editor.value.slice(0, pos);
-  const lineNumber = before.split("\n").length - 1;
-  const lineStart = before.lastIndexOf("\n") + 1;
-  const line = editor.value.split("\n")[lineNumber] || "";
-  const col = pos - lineStart;
-  if (isClickOnStepStar(e, line, col)) {
-    setCurrentStep(lineNumber);
-  }
-  previewCurrentLine();
-});
-editor.addEventListener("keyup", (e) => {
-  // Only preview when navigating between lines, not while typing.
-  if (PREVIEW_KEYS.has(e.key)) previewCurrentLine();
 });
 
 tabScript.addEventListener("click", () => showTab("script"));
@@ -634,8 +572,8 @@ async function init() {
     setRecording(!!st.recording);
     setRunning(!!st.running);
   }
+  highlightUpcomingStep(0);
   setStatus("Ready.");
-  renderHighlights();
 }
 
 init();

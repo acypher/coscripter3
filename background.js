@@ -1083,22 +1083,51 @@ async function handle(msg, sender, sendResponse) {
     case "PREVIEW_STEP": {
       const [indent, slop] = getSlop(msg.line || "");
       if (slop === "" || indent === 0) {
-        sendResponse({ ok: true, skipped: true });
+        try {
+          if (msg.tabId != null) {
+            await chrome.tabs.sendMessage(msg.tabId, { type: "CLEAR_PREVIEW" });
+          }
+        } catch (e) { /* ignore */ }
+        sendResponse({ ok: true, skipped: true, hasTarget: false, found: false });
         return;
       }
       const cmd = parseLine(slop, indent);
+      if (!cmd.needsPage()) {
+        try {
+          if (msg.tabId != null) {
+            await chrome.tabs.sendMessage(msg.tabId, { type: "CLEAR_PREVIEW" });
+          }
+        } catch (e) { /* ignore */ }
+        sendResponse({ ok: true, skipped: true, hasTarget: false, found: false });
+        return;
+      }
       const db = await PersonalDB.load();
       const resolved = await resolveCommand(cmd, db);
       const ready = await ensureContentReady(msg.tabId);
       if (!ready) {
-        sendResponse({ ok: false, error: "Page not accessible." });
+        sendResponse({ ok: false, error: "Page not accessible.", hasTarget: true, found: false });
         return;
       }
       const res = await chrome.tabs.sendMessage(msg.tabId, {
         type: "PREVIEW",
         command: plainCommand(resolved),
       });
-      sendResponse(res || { ok: false });
+      sendResponse({
+        ok: true,
+        hasTarget: true,
+        found: !!(res && res.found),
+        ...(res || {}),
+      });
+      return;
+    }
+
+    case "CLEAR_PREVIEW": {
+      try {
+        if (msg.tabId != null) {
+          await chrome.tabs.sendMessage(msg.tabId, { type: "CLEAR_PREVIEW" });
+        }
+      } catch (e) { /* ignore */ }
+      sendResponse({ ok: true });
       return;
     }
 

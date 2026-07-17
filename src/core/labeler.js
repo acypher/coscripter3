@@ -525,6 +525,7 @@ export function previewElement(command, doc = document) {
   try {
     el.scrollIntoView({ block: "center", inline: "center" });
     el.classList.add("__coscripter_preview__");
+    // Match editor preview style (light-blue solid). Cleared by clearPreview / timeout.
     setTimeout(() => el.classList.remove("__coscripter_preview__"), 1200);
   } catch (e) { /* ignore */ }
   return true;

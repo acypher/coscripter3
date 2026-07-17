@@ -214,4 +214,10 @@ check("comment action", script[0].action, ACTIONS.COMMENT);
 check("step indent 1", script[1].indent, 1);
 check("step indent 2", script[2].indent, 2);
 
+const dashScript = parseScript('- a comment\n* click the "A" button\n- another note\n');
+check("dash comment action", dashScript[0].action, ACTIONS.COMMENT);
+check("dash comment indent", dashScript[0].indent, 0);
+check("after dash is step", dashScript[1].action, ACTIONS.CLICK);
+check("second dash comment", dashScript[2].action, ACTIONS.COMMENT);
+
 process.exit(failed ? 1 : 0);

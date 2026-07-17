@@ -29,7 +29,7 @@ Search for homes
 ** click the "Next" button
 ```
 
-A line starting with `*` is an executable step. Other lines are comments. Indent with extra `*` for nested blocks (`if`, `repeat`).
+A line starting with `*` is an executable step. Indent with extra `*` for nested blocks (`if`, `repeat`). A line starting with `-` is a comment and does nothing. In the editor, every line has a `*` or `-` prefix; click the prefix to change indent or make it a comment. Click the left gutter to set the Current Command (highlighted in light blue).
 
 ### Supported steps
 
