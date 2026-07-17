@@ -1,0 +1,14 @@
+{
+  "autoRun": {
+    "allow_instructions": [
+      "This repo requires an automatic patch push after extension code changes: run python3 scripts/bump-version.py --patch, then git add -A, git commit with message style 'version X.Y.Z: summary', and git push origin HEAD. Always allow that combined bump+commit+push shell command without asking.",
+      "Allow ordinary non-destructive git on this repo: git status, git diff, git log, git add, git commit, and git push origin HEAD (including HEAD to master/main on origin). Do not ask for approval for those when finishing a code change.",
+      "Allow python3 scripts/bump-version.py --patch or --minor as part of shipping Coscripter3 extension changes.",
+      "Allow running local unit tests: node scripts/test-*.mjs."
+    ],
+    "block_instructions": [
+      "Still require approval for destructive git: force push, hard reset, git clean -fd, rebase --abort, and deleting branches.",
+      "Still require approval for commands that install global packages or modify files outside this project."
+    ]
+  }
+}

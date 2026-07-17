@@ -137,6 +137,7 @@ function highlightUpcomingStep(fromIndex = 0) {
 /**
  * Refresh the CC match Dot / page highlight.
  * Retries help after navigation (e.g. Step on "go to" then preview the next click).
+ * While retrying, leave the Dot empty — only show red after all attempts fail.
  */
 async function refreshCcPreview(lineIndex = state.stepLine, { retries = 8 } = {}) {
   const gen = ++previewGen;
@@ -148,6 +149,8 @@ async function refreshCcPreview(lineIndex = state.stepLine, { retries = 8 } = {}
     if (tabId != null) await send({ type: "CLEAR_PREVIEW", tabId });
     return;
   }
+
+  scriptEditor.clearDot();
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     if (gen !== previewGen) return;
@@ -164,16 +167,25 @@ async function refreshCcPreview(lineIndex = state.stepLine, { retries = 8 } = {}
       return;
     }
 
-    // hasTarget (page match, go to, if, etc.): always show green or red
     if (res.found) {
       scriptEditor.setDot("green");
       return;
     }
 
-    // Not found yet — show red, but keep retrying after nav/load
+    // Not found yet — stay empty while retrying; red only on final failure.
+    if (attempt < retries) {
+      await delay(400);
+      continue;
+    }
     scriptEditor.setDot("red");
-    if (attempt < retries) await delay(400);
   }
+}
+
+async function clearCcPreview() {
+  previewGen++;
+  scriptEditor.clearDot();
+  const tabId = await getActiveTabId();
+  if (tabId != null) await send({ type: "CLEAR_PREVIEW", tabId });
 }
 
 function setRecording(on) {
@@ -343,6 +355,7 @@ async function stepScript() {
     return;
   }
   scriptEditor.clearDot();
+  await clearCcPreview();
   const res = await send({
     type: "RUN_STEP",
     script: scriptEditor.getText(),

@@ -7,6 +7,8 @@ alwaysApply: true
 
 Whenever you change extension code, finish the work with a **patch push**: bump the patch version, commit, and push to `origin`. Do this automatically — do not wait for the user to ask.
 
+This is **explicit publication intent** for Auto-review. See [`.cursor/permissions.json`](.cursor/permissions.json): bump + commit + `git push origin HEAD` must run without an approval card.
+
 ## Steps
 
 1. Bump the patch version:
@@ -41,7 +43,7 @@ Do this for changes to source, UI, tests, icons, or other shipped extension file
 Skip bump/commit/push for docs-only or Cursor-meta edits alone, such as:
 
 - `README.md`
-- `.cursor/**` (rules, skills)
+- `.cursor/**` (rules, skills, permissions.json)
 - `PARITY-PLAN.md` (unless bundled with a code change)
 
 If a task mixes code changes with docs or Cursor config, still patch-push once for the code changes (include the docs in that same commit).

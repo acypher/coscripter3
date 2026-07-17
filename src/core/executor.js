@@ -9,14 +9,16 @@ let clipboardCache = "";
 const PREVIEW_CLASS = "__coscripter_preview__";
 
 function ensureHighlightStyle() {
-  if (document.getElementById("__coscripter_style__")) return;
-  const style = document.createElement("style");
-  style.id = "__coscripter_style__";
+  let style = document.getElementById("__coscripter_style__");
+  if (!style) {
+    style = document.createElement("style");
+    style.id = "__coscripter_style__";
+    (document.head || document.documentElement).appendChild(style);
+  }
   style.textContent = `
     .${HIGHLIGHT_CLASS}{outline:3px solid #ff5a36 !important;outline-offset:2px !important;transition:outline 0.1s;}
-    .${PREVIEW_CLASS}{outline:2px solid #169a5b !important;outline-offset:2px !important;}
+    .${PREVIEW_CLASS}{outline:4px solid #169a5b !important;outline-offset:2px !important;}
   `;
-  (document.head || document.documentElement).appendChild(style);
 }
 
 export function clearPreview(doc = document) {
@@ -269,8 +271,9 @@ export async function execute(command) {
   }
 
   if (el) {
-    try { el.scrollIntoView({ block: "center", inline: "center" }); } catch (e) { /* ignore */ }
-    flash(el);
+    try { el.scrollIntoView({ block: "center", inline: "nearest" }); } catch (e) { /* ignore */ }
+    // Drop any green match preview; do not flash red/orange on execute.
+    clearPreview(document);
   }
 
   switch (command.action) {
