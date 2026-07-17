@@ -340,6 +340,29 @@ async function checkCondition(cmd, tabId) {
   }
 }
 
+/** True if a go-to location can be turned into a navigable URL (same rules as run). */
+function isValidGotoLocation(location) {
+  let url = String(location || "").trim();
+  if (!url) return false;
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(url) && !url.startsWith("about:")) {
+    url = "https://" + url;
+  }
+  try {
+    const parsed = new URL(url);
+    if (url.startsWith("about:")) return true;
+    return !!parsed.hostname;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function clearTabPreview(tabId) {
+  if (tabId == null) return;
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: "CLEAR_PREVIEW" });
+  } catch (e) { /* ignore */ }
+}
+
 async function readElementValueFromPage(cmd, tabId) {
   const ready = await ensureContentReady(tabId);
   if (!ready) return null;
@@ -1083,26 +1106,57 @@ async function handle(msg, sender, sendResponse) {
     case "PREVIEW_STEP": {
       const [indent, slop] = getSlop(msg.line || "");
       if (slop === "" || indent === 0) {
-        try {
-          if (msg.tabId != null) {
-            await chrome.tabs.sendMessage(msg.tabId, { type: "CLEAR_PREVIEW" });
-          }
-        } catch (e) { /* ignore */ }
+        await clearTabPreview(msg.tabId);
         sendResponse({ ok: true, skipped: true, hasTarget: false, found: false });
         return;
       }
       const cmd = parseLine(slop, indent);
-      if (!cmd.needsPage()) {
-        try {
-          if (msg.tabId != null) {
-            await chrome.tabs.sendMessage(msg.tabId, { type: "CLEAR_PREVIEW" });
+      const db = await PersonalDB.load();
+      const resolved = await resolveCommand(cmd, db);
+
+      // go to: green if the URL is valid, red otherwise (no page target outline).
+      if (resolved.action === ACTIONS.GOTO) {
+        await clearTabPreview(msg.tabId);
+        const valid = isValidGotoLocation(resolved.location);
+        sendResponse({ ok: true, hasTarget: true, found: valid });
+        return;
+      }
+
+      // if: green/red from evaluating the condition in the current page/context.
+      if (resolved.action === ACTIONS.IF) {
+        const ready = await ensureContentReady(msg.tabId);
+        if (!ready) {
+          await clearTabPreview(msg.tabId);
+          sendResponse({ ok: false, error: "Page not accessible.", hasTarget: true, found: false });
+          return;
+        }
+        const truth = await checkCondition(resolved, msg.tabId);
+        // Highlight the matched element when the condition is an existence check and true.
+        const canHighlight =
+          truth &&
+          !resolved.conditionSelection &&
+          resolved.conditionType !== "comparison";
+        if (canHighlight) {
+          try {
+            await chrome.tabs.sendMessage(msg.tabId, {
+              type: "PREVIEW",
+              command: plainCommand({ ...resolved, action: ACTIONS.THERE_IS }),
+            });
+          } catch (e) {
+            await clearTabPreview(msg.tabId);
           }
-        } catch (e) { /* ignore */ }
+        } else {
+          await clearTabPreview(msg.tabId);
+        }
+        sendResponse({ ok: true, hasTarget: true, found: !!truth });
+        return;
+      }
+
+      if (!resolved.needsPage()) {
+        await clearTabPreview(msg.tabId);
         sendResponse({ ok: true, skipped: true, hasTarget: false, found: false });
         return;
       }
-      const db = await PersonalDB.load();
-      const resolved = await resolveCommand(cmd, db);
       const ready = await ensureContentReady(msg.tabId);
       if (!ready) {
         sendResponse({ ok: false, error: "Page not accessible.", hasTarget: true, found: false });
@@ -1122,11 +1176,7 @@ async function handle(msg, sender, sendResponse) {
     }
 
     case "CLEAR_PREVIEW": {
-      try {
-        if (msg.tabId != null) {
-          await chrome.tabs.sendMessage(msg.tabId, { type: "CLEAR_PREVIEW" });
-        }
-      } catch (e) { /* ignore */ }
+      await clearTabPreview(msg.tabId);
       sendResponse({ ok: true });
       return;
     }
