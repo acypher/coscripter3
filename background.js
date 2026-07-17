@@ -10,6 +10,7 @@ import {
   lock,
   setupPassword,
   unlockWithPassword,
+  resetPrivateData,
 } from "./src/core/personaldb.js";
 import {
   loadTableForRef,
@@ -1046,7 +1047,7 @@ async function handle(msg, sender, sendResponse) {
     case "UNLOCK_PDB": {
       const result = await unlockWithPassword(msg.password || "");
       if (!result.ok) {
-        sendResponse(result);
+        sendResponse({ ...result, canReset: true });
         return;
       }
       const db = await PersonalDB.load();
@@ -1055,6 +1056,23 @@ async function handle(msg, sender, sendResponse) {
         text: db.toDisplayText(),
         unlocked: true,
         hasPrivate: db.hasPrivateEntries(),
+      });
+      return;
+    }
+
+    case "RESET_PDB_PASSWORD": {
+      const result = await resetPrivateData();
+      notifyPanel({
+        type: "PDB_AUTH",
+        unlocked: false,
+        hasPrivate: false,
+      });
+      sendResponse({
+        ok: true,
+        text: result.text || "",
+        unlocked: false,
+        hasPrivate: false,
+        needsSetup: false,
       });
       return;
     }

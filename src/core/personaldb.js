@@ -16,6 +16,8 @@ export const MASKED_VALUE = "••••••";
 
 /** @type {CryptoKey | null} */
 let unlockKey = null;
+/** Salt that `unlockKey` was derived with (must match what we persist on save). */
+let unlockSalt = null;
 
 function norm(s) {
   return (s || "").replace(/\s+/g, " ").trim();
@@ -61,6 +63,7 @@ export function isUnlocked() {
 
 export function lock() {
   unlockKey = null;
+  unlockSalt = null;
 }
 
 async function loadCryptoMeta() {
@@ -70,32 +73,54 @@ async function loadCryptoMeta() {
 
 export async function hasStoredCrypto() {
   const meta = await loadCryptoMeta();
-  return Boolean(meta?.salt);
+  return Boolean(meta?.salt && (meta.secrets || []).length > 0);
 }
 
 export async function unlockWithPassword(password) {
+  const trimmed = String(password || "").trim();
   const meta = await loadCryptoMeta();
   if (!meta?.salt) {
-    unlockKey = null;
+    lock();
     return { ok: false, error: "No private data saved yet." };
   }
   const sample = (meta.secrets || [])[0];
-  const ok = await verifyPassword(password, meta.salt, sample);
+  if (!sample?.iv || !sample?.data) {
+    lock();
+    return { ok: false, error: "Private data is corrupted. Use Reset Password." };
+  }
+  const ok = await verifyPassword(trimmed, meta.salt, sample);
   if (!ok) {
-    unlockKey = null;
+    lock();
     return { ok: false, error: "Incorrect password." };
   }
-  unlockKey = await deriveKey(password, meta.salt);
+  unlockKey = await deriveKey(trimmed, meta.salt);
+  unlockSalt = meta.salt;
   return { ok: true };
 }
 
 export async function setupPassword(password) {
-  const trimmed = (password || "").trim();
+  const trimmed = String(password || "").trim();
   if (!trimmed) return { ok: false, error: "Choose a password." };
   const meta = await loadCryptoMeta();
+  // Prefer existing salt so re-setup keeps decryptable secrets when possible.
+  // On first setup, generate one salt and keep it in unlockSalt so save() does
+  // not mint a second salt (that mismatch made unlock always fail).
   const salt = meta?.salt || (await generateSalt());
   unlockKey = await deriveKey(trimmed, salt);
+  unlockSalt = salt;
   return { ok: true, salt };
+}
+
+/**
+ * Wipe all private entries and password metadata. Public entries are kept.
+ * After this, the user can set a new password when saving private values again.
+ */
+export async function resetPrivateData() {
+  lock();
+  const data = await chrome.storage.local.get(STORAGE_KEY);
+  const publicText = data[STORAGE_KEY] || "";
+  await chrome.storage.local.remove(CRYPTO_KEY);
+  return { ok: true, text: publicText };
 }
 
 export class PersonalDB {
@@ -169,7 +194,8 @@ export class PersonalDB {
     const existingSecrets = new Map(
       (this._cryptoMeta?.secrets || []).map((s) => [lower(s.key), s])
     );
-    let salt = this._cryptoMeta?.salt;
+    // Must use the salt that unlockKey was derived from (unlockSalt), not a new one.
+    let salt = this._cryptoMeta?.salt || unlockSalt;
     const secrets = [];
 
     for (const entry of privateEntries) {
@@ -184,7 +210,10 @@ export class PersonalDB {
       if (!unlockKey) {
         throw new Error("Unlock your data to save private values.");
       }
-      if (!salt) salt = await generateSalt();
+      if (!salt) {
+        salt = await generateSalt();
+        unlockSalt = salt;
+      }
       const enc = await encryptString(entry.value, unlockKey);
       secrets.push({ key: entry.key, iv: enc.iv, data: enc.data });
     }

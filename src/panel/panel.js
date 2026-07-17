@@ -28,8 +28,9 @@ const pdbAuthHint = document.getElementById("pdbAuthHint");
 const pdbPassword = document.getElementById("pdbPassword");
 const pdbUnlockBtn = document.getElementById("pdbUnlockBtn");
 const pdbLockBtn = document.getElementById("pdbLockBtn");
+const pdbResetBtn = document.getElementById("pdbResetBtn");
 
-let pdbAuthState = { unlocked: false, hasPrivate: false, needsSetup: false };
+let pdbAuthState = { unlocked: false, hasPrivate: false, needsSetup: false, showReset: false };
 
 const tabScript = document.getElementById("tabScript");
 const tabTables = document.getElementById("tabTables");
@@ -261,14 +262,16 @@ async function loadScript(id) {
 }
 
 function updatePdbAuthUi() {
-  const showAuth = pdbAuthState.hasPrivate || pdbAuthState.needsSetup;
+  const showAuth = pdbAuthState.hasPrivate || pdbAuthState.needsSetup || pdbAuthState.showReset;
   pdbAuth.classList.toggle("hidden", !showAuth);
   pdbEditor.classList.toggle("cs-pdb-locked", pdbAuthState.hasPrivate && !pdbAuthState.unlocked);
 
   if (pdbAuthState.needsSetup) {
     pdbAuthHint.textContent = "Set a password to encrypt private entries.";
     pdbUnlockBtn.textContent = "Set password";
+    pdbUnlockBtn.classList.remove("hidden");
     pdbLockBtn.classList.add("hidden");
+    pdbResetBtn.classList.add("hidden");
     return;
   }
 
@@ -276,13 +279,18 @@ function updatePdbAuthUi() {
     pdbAuthHint.textContent = "Private values are unlocked for this session.";
     pdbUnlockBtn.classList.add("hidden");
     pdbLockBtn.classList.remove("hidden");
+    pdbResetBtn.classList.add("hidden");
+    pdbAuthState.showReset = false;
     return;
   }
 
-  pdbAuthHint.textContent = "Log in to view or use private values in scripts.";
+  pdbAuthHint.textContent = pdbAuthState.showReset
+    ? "Incorrect password. Reset Password deletes all private values so you can set a new password."
+    : "Log in to view or use private values in scripts.";
   pdbUnlockBtn.textContent = "Unlock";
   pdbUnlockBtn.classList.remove("hidden");
   pdbLockBtn.classList.add("hidden");
+  pdbResetBtn.classList.toggle("hidden", !pdbAuthState.showReset);
 }
 
 function applyPdbResponse(res) {
@@ -291,6 +299,7 @@ function applyPdbResponse(res) {
   pdbAuthState.unlocked = !!res.unlocked;
   pdbAuthState.hasPrivate = !!res.hasPrivate;
   pdbAuthState.needsSetup = false;
+  pdbAuthState.showReset = false;
   updatePdbAuthUi();
 }
 
@@ -516,7 +525,33 @@ async function unlockPdb() {
     setStatus("Private data unlocked.", "ok");
     return;
   }
+  if (res && res.canReset) {
+    pdbAuthState.showReset = true;
+    updatePdbAuthUi();
+  }
   setStatus((res && res.error) || "Could not unlock.", "error");
+}
+
+async function resetPdbPassword() {
+  const ok = window.confirm(
+    "Reset Password deletes every private (*…) value and clears the password. Public entries are kept. Continue?"
+  );
+  if (!ok) return;
+  const res = await send({ type: "RESET_PDB_PASSWORD" });
+  pdbPassword.value = "";
+  if (res && res.ok) {
+    pdbEditor.value = res.text || "";
+    pdbAuthState = {
+      unlocked: false,
+      hasPrivate: false,
+      needsSetup: false,
+      showReset: false,
+    };
+    updatePdbAuthUi();
+    setStatus("Private data cleared. Add *entries and Save to set a new password.", "ok");
+    return;
+  }
+  setStatus((res && res.error) || "Could not reset password.", "error");
 }
 
 async function lockPdb() {
@@ -650,6 +685,7 @@ importFile.addEventListener("change", () => {
 savePdbBtn.addEventListener("click", savePdb);
 pdbUnlockBtn.addEventListener("click", unlockPdb);
 pdbLockBtn.addEventListener("click", lockPdb);
+pdbResetBtn.addEventListener("click", resetPdbPassword);
 pdbPassword.addEventListener("keydown", (e) => {
   if (e.key === "Enter") unlockPdb();
 });
