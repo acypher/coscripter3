@@ -1242,23 +1242,105 @@ async function handle(msg, sender, sendResponse) {
     }
 
     case "RUN_STEP": {
+      // One Step through the script using the same control-flow rules as Run
+      // (if/else/repeat), so a false `if` jumps past its body.
       const db = await PersonalDB.load();
-      const [indent, slop] = getSlop(msg.line || "");
-      if (slop === "" || indent === 0) {
-        sendResponse({ ok: true, skipped: true });
+      const script = msg.script != null ? String(msg.script) : String(msg.line || "");
+      const runner = ScriptRunner.fromText(script);
+      const start = Math.max(0, msg.lineNumber | 0);
+      runner.pc = Math.min(start, runner.commands.length);
+
+      const step = runner.next();
+      if (!step) {
+        sendResponse({ ok: true, done: true, nextLine: 0 });
         return;
       }
-      const cmd = parseLine(slop, indent);
-      cmd.lineNumber = msg.lineNumber;
-      notifyPanel({ type: "RUN_PROGRESS", lineNumber: msg.lineNumber, status: "running", text: cmd.describe() });
-      const res = await runOne(cmd, msg.tabId, db);
+      const cmd = step.cmd;
+
+      if (step.type === "repeat-counter") {
+        const val = parseInt(db.lookup(cmd.counterKey) || "0", 10);
+        if (val <= 0) runner.skipBlock(cmd);
+        else {
+          runner.enterCounterRepeat(cmd);
+          db.decrement(cmd.counterKey, 1);
+          await db.save();
+          notifyPanel({ type: "PDB_UPDATED", text: db.text });
+        }
+        sendResponse({
+          ok: true,
+          nextLine: runner.pc,
+          lineNumber: cmd.lineNumber,
+          action: cmd.action,
+        });
+        return;
+      }
+
+      if (step.type === "repeat-rows") {
+        const table = await loadTableForRef(
+          { tableName: cmd.repeatTableName || "" },
+          runState.scratchTableId
+        );
+        if (!table || table.getRowCount() < 1) {
+          runner.skipBlock(cmd);
+        } else {
+          runState.scratchTableId = table.id;
+          runner.enterRowRepeat(cmd, table.getRowCount());
+        }
+        sendResponse({
+          ok: true,
+          nextLine: runner.pc,
+          lineNumber: cmd.lineNumber,
+          action: cmd.action,
+        });
+        return;
+      }
+
+      if (step.type === "if") {
+        notifyPanel({
+          type: "RUN_PROGRESS",
+          lineNumber: cmd.lineNumber,
+          status: "running",
+          text: cmd.describe(),
+        });
+        const res = await runOne(cmd, msg.tabId, db);
+        const truth = !!res.conditionResult;
+        runner.branch(cmd, truth);
+        notifyPanel({
+          type: "RUN_PROGRESS",
+          lineNumber: cmd.lineNumber,
+          status: "ok",
+          text: cmd.describe(),
+        });
+        sendResponse({
+          ok: true,
+          conditionResult: truth,
+          nextLine: runner.pc,
+          lineNumber: cmd.lineNumber,
+          action: cmd.action,
+        });
+        return;
+      }
+
       notifyPanel({
         type: "RUN_PROGRESS",
-        lineNumber: msg.lineNumber,
+        lineNumber: cmd.lineNumber,
+        status: "running",
+        text: cmd.describe(),
+      });
+      const res = await runOne(cmd, msg.tabId, db);
+      if (res.ok) runner.advance();
+      notifyPanel({
+        type: "RUN_PROGRESS",
+        lineNumber: cmd.lineNumber,
         status: res.ok ? "ok" : "error",
         text: res.ok ? cmd.describe() : res.error,
       });
-      sendResponse(res);
+      sendResponse({
+        ...res,
+        nextLine: res.ok ? runner.pc : cmd.lineNumber,
+        lineNumber: cmd.lineNumber,
+        action: cmd.action,
+      });
       return;
     }
 

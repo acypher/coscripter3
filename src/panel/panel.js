@@ -343,21 +343,41 @@ async function stepScript() {
     return;
   }
   scriptEditor.clearDot();
-  const res = await send({ type: "RUN_STEP", line: lineText(i), lineNumber: i, tabId });
+  const res = await send({
+    type: "RUN_STEP",
+    script: scriptEditor.getText(),
+    lineNumber: i,
+    tabId,
+  });
   if (res && res.ok) {
-    // Advance CC and re-preview even if RUN_PROGRESS messages were reordered.
-    state.stepLine = i + 1;
-    const next = scriptEditor.nextExecutable(i + 1);
-    if (next === -1) {
+    if (res.done) {
       highlightUpcomingStep(0);
       setStatus("End of script. Step reset to top.");
       return;
     }
-    state.stepLine = next;
-    scriptEditor.setCurrent(next, { notify: false });
-    scriptEditor.scrollLineIntoView(next);
-    setStatus(`Current command: line ${next + 1}.`);
-    await refreshCcPreview(next, { retries: 10 });
+    // nextLine comes from ScriptRunner (if-branch / advance), not i+1.
+    let next = typeof res.nextLine === "number" ? res.nextLine : i + 1;
+    if (next >= scriptEditor.lineCount()) {
+      highlightUpcomingStep(0);
+      setStatus("End of script. Step reset to top.");
+      return;
+    }
+    const exec = scriptEditor.nextExecutable(next);
+    if (exec === -1) {
+      highlightUpcomingStep(0);
+      setStatus("End of script. Step reset to top.");
+      return;
+    }
+    state.stepLine = exec;
+    scriptEditor.setCurrent(exec, { notify: false });
+    scriptEditor.scrollLineIntoView(exec);
+    const jumped = exec > i + 1;
+    setStatus(
+      jumped
+        ? `Current command: line ${exec + 1} (jumped after if).`
+        : `Current command: line ${exec + 1}.`
+    );
+    await refreshCcPreview(exec, { retries: 10 });
   } else {
     state.stepLine = i;
     scriptEditor.setCurrent(i, { notify: false });
