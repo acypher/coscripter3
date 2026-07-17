@@ -263,10 +263,23 @@ export function initScriptEditor({ root, onSetCurrent, onChange, onTextEdit }) {
     root.replaceChildren(frag);
   }
 
-  document.addEventListener("mousedown", (e) => {
+  // Capture phase so we still see clicks even when row handlers stopPropagation.
+  document.addEventListener(
+    "mousedown",
+    (e) => {
+      if (!menuEl) return;
+      if (menuEl.contains(e.target)) return;
+      if (e.target.closest?.(".cs-prefix")) return;
+      closeMenu();
+    },
+    true
+  );
+
+  document.addEventListener("keydown", (e) => {
     if (!menuEl) return;
-    if (menuEl.contains(e.target)) return;
-    if (e.target.closest?.(".cs-prefix")) return;
+    if (e.key !== "Escape") return;
+    e.preventDefault();
+    e.stopPropagation();
     closeMenu();
   });
 
