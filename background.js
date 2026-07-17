@@ -822,10 +822,14 @@ async function followPendingNewTab() {
   await delay(350);
 }
 
-async function runScript(text, tabId) {
+async function runScript(text, tabId, startLine = 0) {
   if (runState.running) return;
   const db = await PersonalDB.load();
   const runner = ScriptRunner.fromText(text);
+  // parseScript keeps one command per source line, so pc == lineNumber.
+  if (startLine > 0) {
+    runner.pc = Math.min(Math.max(0, startLine | 0), runner.commands.length);
+  }
   runState = {
     running: true,
     abort: false,
@@ -1145,7 +1149,7 @@ async function handle(msg, sender, sendResponse) {
 
     case "RUN_SCRIPT": {
       sendResponse({ ok: true });
-      runScript(msg.script || "", msg.tabId);
+      runScript(msg.script || "", msg.tabId, msg.startLine || 0);
       return;
     }
 

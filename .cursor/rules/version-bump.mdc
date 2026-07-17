@@ -1,35 +1,52 @@
 ---
-description: Bump manifest patch version whenever extension code changes
+description: Patch-bump, commit, and push whenever extension code changes
 alwaysApply: true
 ---
 
-# Version bump on code changes
+# Patch push on code changes
 
-Whenever you change extension code, bump the patch version in `manifest.json` as part of the same work.
+Whenever you change extension code, finish the work with a **patch push**: bump the patch version, commit, and push to `origin`. Do this automatically — do not wait for the user to ask.
 
-Run:
+## Steps
+
+1. Bump the patch version:
 
 ```bash
 python3 scripts/bump-version.py --patch
 ```
 
-## When to bump
+2. Commit everything for that change (code + version bump) on the current branch (`master`):
 
-Bump for changes to source, UI, tests, icons, or other shipped extension files, including:
+```bash
+git add -A
+git commit -m "version $NEW: <short summary>"
+```
+
+3. Push:
+
+```bash
+git push origin HEAD
+```
+
+Use the repo’s commit style: `version X.Y.Z: <summary>` (see recent `git log`).
+
+## When to patch-push
+
+Do this for changes to source, UI, tests, icons, or other shipped extension files, including:
 
 - `src/**`, `background.js`, `sidepanel.html`, `manifest.json` (non-version fields), `scripts/**`, `icons/**`
 
-## When not to bump
+## When not to
 
-Skip the bump for docs-only or Cursor-meta edits alone, such as:
+Skip bump/commit/push for docs-only or Cursor-meta edits alone, such as:
 
 - `README.md`
 - `.cursor/**` (rules, skills)
+- `PARITY-PLAN.md` (unless bundled with a code change)
 
-If a task mixes code changes with docs or Cursor config, still bump once for the code changes.
+If a task mixes code changes with docs or Cursor config, still patch-push once for the code changes (include the docs in that same commit).
 
-## Workflow
+## Ship vs patch push
 
-- Bump automatically — do not wait for the user to ask.
-- Include the version bump in the same commit when the user asks you to commit.
-- For **ship** (`ship`, `ship it`), follow the ship skill instead (minor bump by default, not patch).
+- **Ordinary code work** → patch push (this rule).
+- **`ship` / `ship it`** → follow the ship skill instead (minor bump by default, not patch).

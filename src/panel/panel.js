@@ -133,6 +133,32 @@ function highlightUpcomingStep(fromIndex = 0) {
   else setActiveLine(i, "next");
 }
 
+/** Set the next Step/Run line (0-based). Snaps forward to an executable step. */
+function setCurrentStep(lineNumber) {
+  const i = nextExecutableLine(lineNumber);
+  if (i === -1) {
+    state.stepLine = 0;
+    clearHighlight();
+    setStatus("No step at or after that line.");
+    return;
+  }
+  state.stepLine = i;
+  highlightUpcomingStep(i);
+  setStatus(`Next step: line ${i + 1}.`);
+}
+
+/** True if the click landed on a step's leading * (or the left gutter). */
+function isClickOnStepStar(e, line, col) {
+  if (!/^\s*\*+\s+\S/.test(line)) return false;
+  const m = line.match(/^(\s*)(\*+)/);
+  if (!m) return false;
+  const starsStart = m[1].length;
+  const starsEnd = starsStart + m[2].length;
+  const onStars = col >= starsStart && col <= starsEnd;
+  const inGutter = e.offsetX < 30;
+  return onStars || inGutter;
+}
+
 function syncScroll() {
   backdrop.scrollTop = editor.scrollTop;
   backdrop.scrollLeft = editor.scrollLeft;
@@ -294,10 +320,11 @@ async function runScript() {
     setStatus("No active tab.", "error");
     return;
   }
+  const startLine = state.stepLine || 0;
   state.lineStatus = {};
   clearHighlight();
-  setStatus("Running…", "run");
-  await send({ type: "RUN_SCRIPT", script: editor.value, tabId });
+  setStatus(startLine > 0 ? `Running from line ${startLine + 1}…` : "Running…", "run");
+  await send({ type: "RUN_SCRIPT", script: editor.value, tabId, startLine });
 }
 
 async function stepScript() {
@@ -477,13 +504,16 @@ chrome.runtime.onMessage.addListener((msg) => {
         setStatus(`Running: ${msg.text}`, "run");
       } else if (msg.status === "ok") {
         state.lineStatus[msg.lineNumber] = "ok";
+        state.stepLine = msg.lineNumber + 1;
         highlightUpcomingStep(msg.lineNumber + 1);
         setStatus(`OK: ${msg.text}`, "ok");
       } else if (msg.status === "skipped") {
         state.lineStatus[msg.lineNumber] = "skipped";
+        state.stepLine = msg.lineNumber + 1;
         highlightUpcomingStep(msg.lineNumber + 1);
         setStatus("Skipped.", "ok");
       } else if (msg.status === "error") {
+        state.stepLine = msg.lineNumber;
         setActiveLine(msg.lineNumber, "error");
         setStatus(`Error: ${msg.text}`, "error");
       }
@@ -535,7 +565,18 @@ editor.addEventListener("input", () => {
   lastPreviewLine = -1; // typing shouldn't trigger a preview on the next keyup
   renderHighlights();
 });
-editor.addEventListener("click", previewCurrentLine);
+editor.addEventListener("click", (e) => {
+  const pos = editor.selectionStart;
+  const before = editor.value.slice(0, pos);
+  const lineNumber = before.split("\n").length - 1;
+  const lineStart = before.lastIndexOf("\n") + 1;
+  const line = editor.value.split("\n")[lineNumber] || "";
+  const col = pos - lineStart;
+  if (isClickOnStepStar(e, line, col)) {
+    setCurrentStep(lineNumber);
+  }
+  previewCurrentLine();
+});
 editor.addEventListener("keyup", (e) => {
   // Only preview when navigating between lines, not while typing.
   if (PREVIEW_KEYS.has(e.key)) previewCurrentLine();
