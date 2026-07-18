@@ -8,6 +8,27 @@
     #results .ok { color: green; }
     #results .fail { color: red; font-weight: bold; }
     #fixture { border: 1px solid #ccc; padding: 10px; margin-bottom: 16px; }
+    /* Mirror MUI PrivateSwitchBase: native input is opacity:0 under visible chrome */
+    .MuiCheckbox-root {
+      position: relative;
+      display: inline-flex;
+      width: 24px;
+      height: 24px;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #888;
+    }
+    .MuiCheckbox-root input {
+      position: absolute;
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      margin: 0;
+      padding: 0;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -54,7 +75,7 @@
 
   <script type="module">
     import { parseLine } from "../src/core/parser.js";
-    import { findElement, labelFor, describeChangeTarget } from "../src/core/labeler.js";
+    import { findElement, labelFor, describeChangeTarget, isVisible } from "../src/core/labeler.js";
     import { execute } from "../src/core/executor.js";
 
     const results = document.getElementById("results");
@@ -91,6 +112,7 @@
 
     // MUI list-item checkbox: visible "Amazon" beats technical id / aria-label="Select"
     const amazonBox = document.getElementById("category-10-0-select-box");
+    check("opacity-0 checkbox still considered visible", isVisible(amazonBox) === true);
     check("list-row checkbox labels as Amazon", labelFor(amazonBox) === "Amazon");
     check(
       "list-row checkbox records Amazon",

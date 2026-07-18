@@ -15,14 +15,40 @@ function lower(s) {
   return norm(s).toLowerCase();
 }
 
-export function isVisible(el) {
+function isDisplayed(el) {
   if (!el || !(el instanceof Element)) return false;
   const rect = el.getBoundingClientRect();
   if (rect.width === 0 && rect.height === 0) return false;
   const style = el.ownerDocument.defaultView.getComputedStyle(el);
   if (style.display === "none" || style.visibility === "hidden") return false;
-  if (parseFloat(style.opacity) === 0) return false;
   return true;
+}
+
+// MUI/Ant-style switches keep the native input at opacity:0 while the
+// surrounding checkbox chrome stays clickable. Treat those inputs as visible
+// when a nearby ancestor still paints on screen.
+function toggleChromeVisible(el) {
+  let n = el.parentElement;
+  for (let i = 0; i < 5 && n; i++) {
+    if (isDisplayed(n)) {
+      const style = n.ownerDocument.defaultView.getComputedStyle(n);
+      if (parseFloat(style.opacity) > 0) return true;
+    }
+    n = n.parentElement;
+  }
+  return false;
+}
+
+export function isVisible(el) {
+  if (!el || !(el instanceof Element)) return false;
+  const style = el.ownerDocument.defaultView.getComputedStyle(el);
+  if (style.display === "none" || style.visibility === "hidden") return false;
+  const rect = el.getBoundingClientRect();
+  const hasBox = !(rect.width === 0 && rect.height === 0);
+  const opaque = parseFloat(style.opacity) > 0;
+  if (hasBox && opaque) return true;
+  // Native checkbox/radio may be opacity:0 or zero-sized under visible chrome.
+  return isToggleControl(el) && toggleChromeVisible(el);
 }
 
 function cssEscape(value) {
