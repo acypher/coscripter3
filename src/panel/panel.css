@@ -295,9 +295,19 @@ body {
   outline: none;
   caret-color: var(--accent);
   border-radius: 3px;
+  user-select: text;
 }
 .cs-text:focus {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.cs-text::selection,
+.cs-text *::selection {
+  background: rgba(128, 64, 192, 0.45);
+  color: var(--text);
+}
+.cs-sel-piece {
+  background: rgba(128, 64, 192, 0.45);
+  border-radius: 2px;
 }
 
 .cs-prefix-menu {
