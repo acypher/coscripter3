@@ -282,11 +282,65 @@ function spatialLabel(el) {
   return best;
 }
 
+// Generic aria-labels on MUI/Ant-style checkboxes ("Select", "Toggle", …)
+// are not useful recorded labels — prefer nearby row text instead.
+function isGenericControlLabel(s) {
+  const l = lower(s);
+  if (!l) return true;
+  return /^(select|selected|checkbox|check ?box|radio|toggle|switch|on|off|checked|unchecked|true|false|input|button|option|item)$/i.test(l);
+}
+
+function isToggleControl(el) {
+  if (!el || !(el instanceof Element)) return false;
+  const tag = el.tagName.toLowerCase();
+  if (tag === "input") {
+    const t = (el.type || "").toLowerCase();
+    return t === "checkbox" || t === "radio";
+  }
+  const role = (el.getAttribute("role") || "").toLowerCase();
+  return role === "checkbox" || role === "radio" || role === "switch";
+}
+
+// List-row checkboxes (e.g. MUI ListItem + Checkbox) often put the human
+// name in a sibling ListItemText while the input only has a technical id.
+function controlRowLabel(el) {
+  const row = el.closest(
+    'li, [role="listitem"], [id$="-row-item"], [id$="-row"], [class*="ListItem"], [class*="listItem"], [class*="list-item"]'
+  );
+  if (!row) return "";
+  const primarySelectors = [
+    ".MuiListItemText-primary",
+    "[class*='ListItemText-primary']",
+    "[id$='-name-text']",
+    "[class*='listItemText']",
+    "[class*='ListItemText']",
+  ];
+  for (const sel of primarySelectors) {
+    for (const node of row.querySelectorAll(sel)) {
+      if (node.contains(el)) continue;
+      const t = norm(node.textContent);
+      if (t && t.length <= 80 && !isGenericControlLabel(t)) return t;
+    }
+  }
+  const clone = row.cloneNode(true);
+  clone
+    .querySelectorAll(
+      "input, button, select, textarea, svg, [role='checkbox'], [role='radio'], [role='switch'], [class*='Checkbox'], [class*='collapseIcon'], [class*='CollapseIcon']"
+    )
+    .forEach((n) => n.remove());
+  const t = norm(clone.textContent);
+  if (t && t.length <= 80 && !isGenericControlLabel(t)) return t;
+  return "";
+}
+
 function candidateLabels(el) {
   const labels = [];
   const push = (s) => {
     const n = norm(s);
     if (n) labels.push(n);
+  };
+  const pushAria = (s) => {
+    if (!isGenericControlLabel(s)) push(s);
   };
   const tag = el.tagName.toLowerCase();
   push(associatedLabelText(el));
@@ -308,6 +362,18 @@ function candidateLabels(el) {
       push(spatialLabel(el));
     }
     push(el.value);
+    push(el.getAttribute("name"));
+    push(el.getAttribute("id"));
+    return labels;
+  }
+  if (isToggleControl(el)) {
+    // Prefer human-visible row / nearby text over aria="Select" or technical ids.
+    push(controlRowLabel(el));
+    push(spatialLabel(el));
+    pushAria(el.getAttribute("aria-label"));
+    const wrap = el.closest("[aria-label]");
+    if (wrap && wrap !== el) pushAria(wrap.getAttribute("aria-label"));
+    push(el.getAttribute("title"));
     push(el.getAttribute("name"));
     push(el.getAttribute("id"));
     return labels;

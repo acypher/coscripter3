@@ -28,6 +28,25 @@
       <option>Green</option>
     </select>
     <div role="tab">Settings</div>
+
+    <!-- MUI-style list row: checkbox id is technical; visible name is sibling text -->
+    <ul class="MuiList-root">
+      <ul id="category-10-0-row-container">
+        <li class="MuiListItem-root" id="category-10-0-row-item">
+          <div class="collapseIcon narrowMode"></div>
+          <div class="itemContentContainer narrowMode">
+            <div class="actionsSelectContainer">
+              <span class="MuiCheckbox-root" aria-label="Select">
+                <input id="category-10-0-select-box" type="checkbox" />
+              </span>
+            </div>
+            <div class="MuiListItemText-root" id="category-10-0-name-text">
+              <span class="MuiTypography-root MuiListItemText-primary">Amazon</span>
+            </div>
+          </div>
+        </li>
+      </ul>
+    </ul>
   </div>
 
   <div id="results"></div>
@@ -35,7 +54,7 @@
 
   <script type="module">
     import { parseLine } from "../src/core/parser.js";
-    import { findElement } from "../src/core/labeler.js";
+    import { findElement, labelFor, describeChangeTarget } from "../src/core/labeler.js";
     import { execute } from "../src/core/executor.js";
 
     const results = document.getElementById("results");
@@ -70,6 +89,18 @@
     check("checkbox by wrapped label", find('turn on the "Remember me" checkbox')?.id === "remember");
     check("select by aria-label", find('select "Blue" from the "Color" listbox')?.id === "color");
 
+    // MUI list-item checkbox: visible "Amazon" beats technical id / aria-label="Select"
+    const amazonBox = document.getElementById("category-10-0-select-box");
+    check("list-row checkbox labels as Amazon", labelFor(amazonBox) === "Amazon");
+    check(
+      "list-row checkbox records Amazon",
+      describeChangeTarget(amazonBox)?.label === "Amazon"
+    );
+    check(
+      'find Amazon checkbox by visible name',
+      find('turn on the "Amazon" checkbox')?.id === "category-10-0-select-box"
+    );
+
     // Execution
     await execute(parseLine('enter "hello" into the "Search" textbox'));
     check("enter sets value", document.getElementById("q").value === "hello");
@@ -81,6 +112,8 @@
     check("turn off unchecks", document.getElementById("remember").checked === false);
     await execute(parseLine('select "Blue" from the "Color" listbox'));
     check("select picks option", document.getElementById("color").value === "Blue");
+    await execute(parseLine('turn on the "Amazon" checkbox'));
+    check("Amazon turn on checks", amazonBox.checked === true);
     const res = await execute(parseLine('click the "Nonexistent" button'));
     check("missing element reports error", res.ok === false && res.error.startsWith("Could not find"));
 
