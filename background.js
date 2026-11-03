@@ -588,6 +588,36 @@ async function runOne(cmd, tabId, db) {
     return { ok: true };
   }
 
+  if (resolved.action === ACTIONS.CAPTURE_PAGE) {
+    const ready = await ensureContentReady(tabId);
+    if (!ready) return { ok: false, error: "Page is not accessible (try an http/https page)." };
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, { type: "READ_PAGE_DETAILS" });
+      if (!response?.ok || !response.details) {
+        return { ok: false, error: response?.error || "No response from page." };
+      }
+      const details = response.details;
+      if (!details.title || !/^https?:\/\//i.test(details.url || "")) {
+        return { ok: false, error: "The source page needs a title and an http/https URL." };
+      }
+      const prefix = resolved.pageDetailsPrefix;
+      if (!prefix || /[=*\r\n]/.test(prefix)) {
+        return { ok: false, error: "Choose a page-details name without equals signs, asterisks or newlines." };
+      }
+      const fields = ["title", "description", "image", "url"];
+      // Do not replace a locked private entry with newly captured public data.
+      if (!isUnlocked() && fields.some((field) => db.isPrivateKey(`${prefix} ${field}`))) {
+        return { ok: false, error: "Unlock your data before replacing private page details." };
+      }
+      for (const field of fields) db.changeEntry(`${prefix} ${field}`, details[field] || "");
+      await db.save();
+      notifyPanel({ type: "PDB_UPDATED", text: db.text });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: String(e.message || e) };
+    }
+  }
+
   if (resolved.action === ACTIONS.INCREMENT) {
     if (resolved.cellRef) return executeScratchCellCommand(resolved, tabId);
     db.increment(resolved.personalKey || resolved.label, resolved.incrementBy || 1);

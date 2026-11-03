@@ -40,6 +40,7 @@ A line starting with `*` is an executable step. Indent with extra `*` for nested
 | Input | `enter`, `put`, `append`, `select`, `turn on/off` |
 | Sections | `expand`, `collapse`, `toggle` the `"Section" section` |
 | Clipboard | `copy`, `paste`, `clip` |
+| Page details | `capture the page details as "Article"` (title, description, image, URL) |
 | Timing | `pause N seconds`, `wait until the "…" button` |
 | Control flow | `if there is …`, `else`, `end`, `repeat N times`, `repeat with your "counter"` |
 | Variables | `enter your "name" into …`, `increment your "counter" by 1` |
@@ -67,6 +68,31 @@ If you already had Coscripter3 loaded unpacked **before** this key was added, re
 ### Sharing scripts
 
 To share a script with someone else, use **Export** (`.coscript` file) and send the file — email, GitHub, Drive, etc. They use **Import** to open it. In-extension wiki sharing is planned for Phase 7.
+
+### Klatschify
+
+With the source article selected, open the Coscripter3 side panel, **Import**
+`examples/Klatschify.coscript`, **Save**, and **Run**. Sign in to The Klatsch in
+the same browser first. The macro captures the source headline, description,
+image URL and current page URL, then opens the Klatsch create form in a new tab
+and saves a **draft**. The source tab stays open. Author remains `AC and Comet`,
+matching the saved Klatsch routine. Keywords, More Content and Summary start
+blank; Private stays off and Draft stays on.
+
+The description comes from Open Graph, Twitter, ordinary page metadata,
+structured article data, or a short excerpt of an article paragraph. It is not
+an AI-written summary, and needs no Perplexity subscription or model API. If the
+page has no usable description, the script pauses for you to enter one before
+saving. If no source image is available, The Klatsch can try its existing
+URL-based image lookup when focus leaves Source URL. Its normal fallback applies
+if no image can be found.
+
+The reusable command `capture the page details as "Klatsch"` stores
+`Klatsch title`, `Klatsch description`, `Klatsch image` and `Klatsch url` in
+**Your data**. Other scripts can use their own prefix. Missing optional values
+are cleared on every capture, so an earlier article's image cannot carry over.
+Captured details are local to the extension until a later script step enters
+them on another page. This command needs Coscripter3 0.13.16 or later.
 
 The matching **private** signing key must live **outside** this folder (e.g. `../coscripter3-signing-key.pem` next to the repo). Chrome warns if a `.pem` is inside the extension directory when you load unpacked.
 
@@ -104,6 +130,10 @@ src/core/storage.js            Local script storage
 **Implemented (v0.4):** ClearScript language subset (quoted and unquoted labels, ordinals, name filters), control flow, personal database, mixed-initiative steps, cross-tab recording and playback (runs follow link-opened tabs), automatic wait-and-retry for slow pages, password filtering, step preview/highlighting, error retry/skip.
 
 Unit tests live in `scripts/` — run `node scripts/test-parser.mjs`, `node scripts/test-runner.mjs`, `node scripts/test-nav-logic.mjs`, `node scripts/test-media-label.mjs`.
+
+Klatschify capture and macro checks: `node scripts/test-page-details.mjs` and
+`node scripts/test-klatschify.mjs` (authored fixtures and in-memory extension APIs;
+these do not publish articles or access a browser).
 
 **Planned (Phase 6 — scratch space):** Spreadsheet tables (Vegemite) — data model + Tables editor UI done; still todo: cell refs in scripts, data extraction mode, repeat-over-rows.
 

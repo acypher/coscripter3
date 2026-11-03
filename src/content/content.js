@@ -11,7 +11,7 @@
   const base = chrome.runtime.getURL("src/core/");
 
   const ready = (async () => {
-    const [recorderMod, executorMod, commandsMod, labelerMod, extractModeMod, extractionMod] =
+    const [recorderMod, executorMod, commandsMod, labelerMod, extractModeMod, extractionMod, pageDetailsMod] =
       await Promise.all([
         import(base + "recorder.js"),
         import(base + "executor.js"),
@@ -19,6 +19,7 @@
         import(base + "labeler.js"),
         import(base + "extract-mode.js"),
         import(base + "extraction.js"),
+        import(base + "page-details.js"),
       ]);
     const recorder = new recorderMod.Recorder(
       (slop) => {
@@ -43,6 +44,7 @@
       stopExtractMode: extractModeMod.stopExtractMode,
       extractFromRecipe: extractionMod.extractFromRecipe,
       scrapeBestTable: extractionMod.scrapeBestTable,
+      readPageDetails: pageDetailsMod.readPageDetails,
     };
   })();
 
@@ -67,6 +69,13 @@
     }
 
     if (!isTop) return;
+
+    if (msg.type === "READ_PAGE_DETAILS") {
+      ready
+        .then(({ readPageDetails }) => sendResponse({ ok: true, details: readPageDetails(document) }))
+        .catch((e) => sendResponse({ ok: false, error: String(e) }));
+      return true;
+    }
 
     if (msg.type === "START_EXTRACT_MODE") {
       ready

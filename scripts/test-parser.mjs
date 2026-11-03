@@ -21,6 +21,13 @@ function p(line) {
 }
 
 // --- basic actions ---
+const capture = p('capture the page details as "Klatsch"');
+check("capture page details action", capture.action, ACTIONS.CAPTURE_PAGE);
+check("capture prefix", capture.pageDetailsPrefix, "Klatsch");
+check("capture serialization", capture.toSlop(), 'capture the page details as "Klatsch"');
+check("capture default prefix", p("capture the current page details").pageDetailsPrefix, "page");
+check("capture has no element target", capture.needsPage(), false);
+check("malformed capture is not executable", p('capture page details as "unterminated').action, ACTIONS.UNKNOWN);
 check("goto", p('go to "example.com"').action, ACTIONS.GOTO);
 check("goto location", p('go to "example.com"').location, "example.com");
 check("go back", p("go back").action, ACTIONS.GO_BACK);

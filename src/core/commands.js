@@ -28,6 +28,7 @@ export const ACTIONS = {
   COPY: "copy",
   PASTE: "paste",
   CLIP: "clip",
+  CAPTURE_PAGE: "capture_page",
   PAUSE: "pause",
   WAIT: "wait",
   VERIFY: "verify",
@@ -114,6 +115,7 @@ export class Command {
     valueCellRef = null,
     extractOverwrite = true,
     extractTableName = "",
+    pageDetailsPrefix = "page",
   } = {}) {
     this.action = action;
     this.label = label;
@@ -156,6 +158,7 @@ export class Command {
     this.valueCellRef = valueCellRef;
     this.extractOverwrite = extractOverwrite;
     this.extractTableName = extractTableName;
+    this.pageDetailsPrefix = pageDetailsPrefix;
   }
 
   isExecutable() {
@@ -201,6 +204,7 @@ export class Command {
       ACTIONS.REPEAT,
       ACTIONS.BEGIN_EXTRACTION,
       ACTIONS.END_EXTRACTION,
+      ACTIONS.CAPTURE_PAGE,
     ].includes(this.action);
   }
 
@@ -270,6 +274,8 @@ export class Command {
 
   toSlop() {
     switch (this.action) {
+      case ACTIONS.CAPTURE_PAGE:
+        return `capture the page details as "${this.pageDetailsPrefix}"`;
       case ACTIONS.GOTO:
         if (this.locationIsPersonal) {
           return `go to your "${this.personalKey || this.location}"`;

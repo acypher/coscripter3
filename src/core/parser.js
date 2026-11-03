@@ -451,6 +451,15 @@ function parseStrict(slop, indent) {
     return base(slop, indent, { action: ACTIONS.YOU, raw: slop });
   }
 
+  // Snapshot source-page metadata before opening another tab.
+  const capture = slop.match(/^capture\s+(?:the\s+)?(?:current\s+)?page\s+details(?:\s+as\s+"([^"\r\n]+)")?\s*$/i);
+  if (capture) {
+    return base(slop, indent, {
+      action: ACTIONS.CAPTURE_PAGE,
+      pageDetailsPrefix: capture[1]?.trim() || "page",
+    });
+  }
+
   // Navigation
   if (/^go\s+back\b/i.test(lower)) return base(slop, indent, { action: ACTIONS.GO_BACK });
   if (/^go\s+forward\b/i.test(lower)) return base(slop, indent, { action: ACTIONS.GO_FORWARD });

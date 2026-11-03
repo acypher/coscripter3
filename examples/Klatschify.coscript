@@ -1,0 +1,19 @@
+- Klatschify — run with the source article selected. Saves a Klatsch draft in a new tab.
+- Description is taken from the source page; no AI service or subscription is used.
+* capture the page details as "Klatsch"
+* open "https://theklatsch.com/create" in a new tab
+* wait until the "Enter article title" textbox
+* enter your "Klatsch title" into the "Enter article title" textbox
+* enter your "Klatsch description" into the "Write a short description of your article" textbox
+* enter "AC and Comet" into the "Author" textbox
+* enter your "Klatsch image" into the "Article Image or Video" textbox
+* enter your "Klatsch url" into the "Source URL" textbox
+* enter "" into the "Write additional content using Markdown..." textbox
+* enter "" into the "Add a brief summary..." textbox
+* turn off the "Private" checkbox
+* turn on the "Draft" checkbox
+* if your "Klatsch description" equals ""
+** you enter a short Description for this article, then click Continue
+* end if
+* click the "Save" button
+* wait until the "Edit" button
