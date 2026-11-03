@@ -1,0 +1,27 @@
+---
+description: Serve DOM tests via scripts/serve-dom-tests.py (never raw http.server)
+alwaysApply: true
+---
+
+# DOM test server
+
+When serving this repo so `scripts/test-dom.html` (or other local static files) can be opened in a browser, **always** use:
+
+```bash
+python3 scripts/serve-dom-tests.py
+```
+
+Optional custom port:
+
+```bash
+python3 scripts/serve-dom-tests.py 9000
+```
+
+## Do not
+
+```bash
+# ❌ BAD — leaves orphans on 8765 when the parent shell dies
+python3 -m http.server 8765 --bind 127.0.0.1
+```
+
+`serve-dom-tests.py` reclaims port 8765 if a previous run is still listening, then prints the DOM test URL.
